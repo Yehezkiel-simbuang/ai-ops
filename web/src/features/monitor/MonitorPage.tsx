@@ -1,4 +1,4 @@
-// Monitor satu server, disusun menurut prioritas: vonis keseluruhan, masalah yang perlu ditangani, resource, lalu rincian yang dilipat.
+// Monitor satu server, disusun menurut prioritas: vonis keseluruhan, masalah yang perlu ditangani, lalu rincian yang dilipat.
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { q, useAction } from '@/api/queries';
@@ -8,7 +8,6 @@ import { VerdictBanner } from '@/components/VerdictBanner';
 import { Async } from '@/components/ui/Async';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Spark } from '@/components/ui/Charts';
 import { Fold } from '@/components/ui/Fold';
 import { Empty, Item, List, PageHead, Section } from '@/components/ui/Layout';
 import { IconBell, IconBulb, IconPulse, IconRefresh } from '@/components/icons';
@@ -34,7 +33,7 @@ function ProblemList({ items, onAck }: { items: Problem[]; onAck: (alertId: numb
 function MonitorBody({ id, d }: { id: number; d: MonitorView }) {
   const s = d.server, refresh = [['servers', id, 'monitor'], ['overview'], ['servers']], sum = summarize(d);
   const ack = useAction((alertId: number) => post(`/api/alerts/${alertId}/ack`), { invalidate: refresh });
-  const cores = d.latest.nproc?.value, checksBad = d.checks.filter(isProblem).length;
+  const checksBad = d.checks.filter(isProblem).length;
 
   return (
     <>
@@ -46,17 +45,6 @@ function MonitorBody({ id, d }: { id: number; d: MonitorView }) {
       </Section>
       {sum.minor.length > 0 && <Fold title="Minor" hint={`${sum.minor.length} | lihat kalau sempat`}><ProblemList items={sum.minor} onAck={(id) => ack.mutateAsync(id)} /></Fold>}
       {sum.info.length > 0 && <Fold title="Info" hint={`${sum.info.length} | hanya jejak, tanpa tindakan`}><ProblemList items={sum.info} onAck={(id) => ack.mutateAsync(id)} /></Fold>}
-
-      {d.series.load5.length > 0 && (
-        <Section title="Resource server" icon={IconPulse}>
-          <div className="sparks">
-            <Spark label="Beban CPU (load 5 menit)" unit="" series={d.series.load5} warnAt={cores} format={(v) => v.toFixed(2)} />
-            <Spark label="Memori tersedia" unit="%" series={d.series.mem_avail_pct} format={(v) => v.toFixed(0)} />
-            <Spark label="Disk root terpakai" unit="%" series={d.series.disk_root_pct} warnAt={85} format={(v) => v.toFixed(0)} />
-            <Spark label="Tekanan I/O (PSI 10 dtk)" unit="%" series={d.series.io_psi10} warnAt={20} format={(v) => v.toFixed(1)} />
-          </div>
-        </Section>
-      )}
 
       <Fold title="Pemeriksaan layanan di dalam server" hint={d.checks.length ? `${d.checks.length} pemeriksaan${checksBad ? `, ${checksBad} tidak normal` : ', semua normal'}` : 'belum ada'} open={d.checks.length === 0}>
         <ChecksPanel serverId={id} checks={d.checks} />

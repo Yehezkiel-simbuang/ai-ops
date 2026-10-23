@@ -76,13 +76,14 @@ describe('MonitorPage', () => {
     await screen.findByRole('heading', { name: /Kondisi|Sehat|Belum ada data/ }); expect(screen.getByText('Pemeriksaan layanan di dalam server').closest('details')).toHaveAttribute('open');
   });
 
-  it('tanpa pemantauan berkala: tidak ada kotak "Pantau tiap N detik"; bagian Resource hanya tampil bila ada data dari pemeriksaan manual', async () => {
+  it('tanpa pemantauan berkala: tidak ada kotak "Pantau tiap N detik"; tidak ada grafik resource', async () => {
     render(view({ series: { load5: [], mem_avail_pct: [], disk_root_pct: [], io_psi10: [], swap_used_mb: [] }, checks: [check(1, { last_run: NOW })] }));
     await screen.findByRole('heading', { name: 'Sehat' });
     expect(screen.queryByText(/Pantau tiap/)).not.toBeInTheDocument(); expect(screen.queryByRole('checkbox', { name: /Pantau/ })).not.toBeInTheDocument(); expect(screen.queryByRole('heading', { name: 'Resource server' })).not.toBeInTheDocument();
   });
-  it('dengan data dari pemeriksaan manual, bagian Resource tampil', async () => {
+  it('walau ada data metrik, grafik resource tidak ditampilkan', async () => {
     render(view());
-    expect(await screen.findByRole('heading', { name: 'Resource server' })).toBeInTheDocument();
+    await screen.findByRole('heading', { name: /Sehat|Kondisi/ });
+    expect(screen.queryByRole('heading', { name: 'Resource server' })).not.toBeInTheDocument();
   });
 });
