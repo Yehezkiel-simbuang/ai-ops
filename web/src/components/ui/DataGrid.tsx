@@ -28,7 +28,7 @@ export function DataGrid<T>({ rows, columns, rowKey, empty, onRowClick, pageSize
   return (
     <div className="grid">
       <div className="tbl-wrap">
-        <table className="tbl" aria-label={label}>
+        <table className="tbl cards" aria-label={label}>
           <thead><tr>{columns.map((c) => {
             const active = sort?.id === c.id, aria = active ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : c.sort ? 'none' : undefined;
             return (
@@ -39,7 +39,7 @@ export function DataGrid<T>({ rows, columns, rowKey, empty, onRowClick, pageSize
           })}</tr></thead>
           <tbody>{view.items.map((r) => (
             <tr key={rowKey(r)} className={onRowClick ? 'click' : undefined} onClick={onRowClick ? () => onRowClick(r) : undefined}>
-              {columns.map((c) => <td key={c.id} className={c.className}>{c.cell(r)}</td>)}
+              {columns.map((c) => <td key={c.id} className={c.className} data-label={c.header}>{c.cell(r)}</td>)}
             </tr>
           ))}</tbody>
         </table>
@@ -51,7 +51,7 @@ export function DataGrid<T>({ rows, columns, rowKey, empty, onRowClick, pageSize
         <button type="button" disabled={view.page <= 1} onClick={() => setPage(view.page - 1)} aria-label="Halaman sebelumnya">Sebelumnya</button>
         {pageWindow(view.page, view.pages).map((n, i) => n === null
           ? <span key={`e${i}`} className="lbl" aria-hidden>...</span>
-          : <button key={n} type="button" className={n === view.page ? 'primary' : undefined} aria-current={n === view.page ? 'page' : undefined} aria-label={`Halaman ${n}`} onClick={() => setPage(n)}>{n}</button>)}
+          : <button key={n} type="button" className={n === view.page ? 'primary pg' : 'pg'} aria-current={n === view.page ? 'page' : undefined} aria-label={`Halaman ${n}`} onClick={() => setPage(n)}>{n}</button>)}
         <button type="button" disabled={view.page >= view.pages} onClick={() => setPage(view.page + 1)} aria-label="Halaman berikutnya">Berikutnya</button>
       </nav>
     </div>

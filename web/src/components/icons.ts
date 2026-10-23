@@ -8,6 +8,6 @@ export {
   LuSend as IconSend, LuServer as IconServer, LuShieldCheck as IconShield, LuSlidersHorizontal as IconSliders, LuSplit as IconSplit,
   LuSquare as IconStop, LuTerminal as IconTerminal, LuTimer as IconTimer, LuTrash2 as IconTrash, LuWrench as IconWrench, LuX as IconClose,
   LuZap as IconBolt, LuUsers as IconUsers, LuGlobe as IconGlobe, LuDatabase as IconDatabase, LuHardDrive as IconDisk, LuCloud as IconCloud, LuInfo as IconInfo,
-  LuSave as IconSave, LuPause as IconPause, LuRotateCcw as IconReset, LuFolderOpen as IconFolder, LuCopy as IconReplica, LuFilter as IconFilter
+  LuSave as IconSave, LuPause as IconPause, LuRotateCcw as IconReset, LuFolderOpen as IconFolder, LuCopy as IconReplica, LuFilter as IconFilter, LuMenu as IconMenu
 } from 'react-icons/lu';
 export type { IconType } from 'react-icons';

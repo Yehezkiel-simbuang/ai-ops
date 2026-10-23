@@ -1,5 +1,5 @@
 // Potongan tata letak halaman yang dipakai berulang.
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { IconType } from '../icons';
 import { IconBulb } from '../icons';
@@ -58,9 +58,18 @@ export function Tile({ value, label }: { value: ReactNode; label: string }) {
 export const Tiles = ({ children }: { children: ReactNode }) => <div className="tiles">{children}</div>;
 
 interface Tab<T extends string> { id: T; label: ReactNode }
+/** Tab satu baris; di layar sempit bisa digeser ke samping dan tab aktif digulir ke tempat yang terlihat. */
 export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: Array<Tab<T>>; value: T; onChange: (id: T) => void }) {
+  const ref = useRef<HTMLDivElement>(null), [more, setMore] = useState(false);   // masih ada tab di luar layar sebelah kanan
+  const measure = () => { const b = ref.current; if (b) setMore(b.scrollWidth > b.clientWidth + 1 && b.scrollLeft + b.clientWidth < b.scrollWidth - 2); };
+  useEffect(() => { measure(); window.addEventListener('resize', measure); return () => window.removeEventListener('resize', measure); }, [tabs.length]);
+  useEffect(() => {
+    const active = ref.current?.querySelector<HTMLElement>('[aria-selected="true"]'), box = ref.current;
+    if (!active || !box || box.scrollWidth <= box.clientWidth) return;
+    box.scrollTo({ left: active.offsetLeft - (box.clientWidth - active.offsetWidth) / 2, behavior: 'smooth' });
+  }, [value]);
   return (
-    <div className="tabs" role="tablist">
+    <div className={`tabs${more ? ' more' : ''}`} role="tablist" ref={ref} onScroll={measure}>
       {tabs.map((t) => <button key={t.id} type="button" role="tab" aria-selected={t.id === value} onClick={() => onChange(t.id)}>{t.label}</button>)}
     </div>
   );

@@ -21,7 +21,7 @@ export function GuidePage() {
             </div>
           ))}
         </div>
-        <nav aria-label="Daftar isi panduan" className="panel" style={{ position: 'sticky', top: 12, alignSelf: 'start' }}>
+        <nav aria-label="Daftar isi panduan" className="panel guide-toc">
           <h2>Daftar isi</h2>
           <ol style={{ margin: 0, paddingLeft: 18 }}>
             {SECTIONS.map((s) => <li key={s.id}><button type="button" className="linklike" aria-current={active === s.id ? 'true' : undefined} onClick={() => go(s.id)}>{s.title}</button></li>)}

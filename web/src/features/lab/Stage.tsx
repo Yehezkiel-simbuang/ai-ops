@@ -37,6 +37,8 @@ export function Stage({ run, frame, newIds, ranks, title }: StageProps) {
   }, [frame]);
 
   return (
+    <div className="stage-box">
+    <p className="lbl swipe-hint">Geser ke samping untuk melihat seluruh diagram.</p>
     <div className="stage-wrap">
     <svg className="stage" viewBox={`0 0 ${layout.width} ${layout.height}`} role="img" aria-label={`Diagram arsitektur: ${title}`} preserveAspectRatio="xMidYMid meet">
       {run.edges.map(([a, b]) => {
@@ -69,6 +71,7 @@ export function Stage({ run, frame, newIds, ranks, title }: StageProps) {
         );
       })}
     </svg>
+    </div>
     </div>
   );
 }

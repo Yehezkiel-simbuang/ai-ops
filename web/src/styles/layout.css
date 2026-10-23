@@ -11,14 +11,26 @@
 .cnt.bad { background: var(--bad); }
 main { padding: 22px clamp(16px, 3vw, 36px) 64px; min-width: 0; max-width: 1180px; width: 100%; }
 main:has(.lab-grid) { max-width: 1560px; }
+.topbar, .scrim { display: none; }
+.navgroup { display: grid; gap: 2px; margin-bottom: 6px; }
+.navhead { font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 3px; }
+.side button.navlink.exit { margin-top: auto; border-top: 1px solid var(--line); border-radius: 0; padding-top: 12px; }
+.menu-btn { position: relative; padding: 8px; }
+.cnt.dot { position: absolute; top: -6px; right: -6px; min-width: 18px; padding: 0 4px; font-size: .66rem; }
+
+/* layar sempit: bilah atas + menu yang bergeser dari kiri, bukan deretan tautan yang memenuhi layar */
 @media (max-width: 800px) {
   .app { grid-template-columns: minmax(0, 1fr); }
-  .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px; }
-  .logo { display: none; }
-  .side a, .side button.navlink { padding: 7px 9px; width: auto; }
-  .side a.ext { margin-top: 0; border: 0; padding-top: 7px; }
-  .side a > span, .side button.navlink > span { flex: none; }
+  .topbar { display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 20; height: 52px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .topbar strong { font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .side { position: fixed; top: 0; left: 0; bottom: 0; z-index: 30; width: min(290px, 84vw); height: auto; padding: 14px 10px calc(14px + env(safe-area-inset-bottom)); border-right: 1px solid var(--line-strong); transform: translateX(-102%); visibility: hidden; transition: transform .2s ease, visibility 0s linear .2s; box-shadow: none; }
+  .side.open { transform: none; visibility: visible; transition: transform .2s ease; box-shadow: 4px 0 24px rgba(0, 0, 0, .25); }
+  .logo { display: flex; }
+  .side a, .side button.navlink { padding: 11px 12px; font-size: .95rem; }
+  .scrim { display: block; position: fixed; inset: 0; z-index: 25; background: rgba(0, 0, 0, .45); }
+  main { padding: 16px 14px 56px; }
 }
+@media (prefers-reduced-motion: reduce) { .side, .side.open { transition: none; } }
 
 .pagehead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 18px; }
 .pagehead h1 { font-size: 1.2rem; }
