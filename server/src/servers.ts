@@ -33,7 +33,7 @@ function cleanKey(k: string): string {
   return t;
 }
 
-export async function list() { return (await db().query<ServerRow>('SELECT s.*, (SELECT COUNT(*) FROM alerts a WHERE a.server_id=s.id AND NOT a.resolved)::int AS open_alerts FROM servers s ORDER BY s.name')).map(publicView); }
+export async function list() { return (await db().query<ServerRow>('SELECT s.*, (SELECT COUNT(*) FROM alerts a WHERE a.server_id=s.id AND NOT a.resolved AND a.level<>\'info\')::int AS open_alerts FROM servers s ORDER BY s.name')).map(publicView); }
 export async function get(id: number | string): Promise<ServerRow | undefined> { return db().one<ServerRow>('SELECT * FROM servers WHERE id=$1', [Number(id)]); }
 export async function getPublic(id: number | string) { const s = await get(id); return s ? publicView(s) : undefined; }
 

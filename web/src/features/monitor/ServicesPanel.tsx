@@ -15,7 +15,7 @@ interface ScanResult { services: ScanService[]; ports: number[] }
 export interface TryResult { command: string; exitCode: number; ms: number; timedOut: boolean; stdout: string; stderr: string; evaluation: { status: string; value: number | null; detail: string } }
 interface Suggestion { unit: string; title: string; command: string; why: string; readOnly: boolean; problem: string }
 
-const TONE: Record<string, [Tone, string]> = { ok: ['ok', 'Normal'], warn: ['warn', 'Peringatan'], crit: ['bad', 'Kritis'], unknown: ['mute', 'Tidak terbaca'] };
+const TONE: Record<string, [Tone, string]> = { ok: ['ok', 'Normal'], minor: ['acc', 'Minor'], warn: ['warn', 'Major'], crit: ['bad', 'Critical'], unknown: ['mute', 'Tidak terbaca'] };
 
 interface StdCheck { name: string; type: string; params: Record<string, unknown>; warn?: number | null; crit?: number | null; confirm?: number }
 const numOrNull = (s: string): number | null => (s.trim() === '' ? null : Number(s));
@@ -34,8 +34,8 @@ export function CommandTester({ serverId, initial, warn, crit, saveLabel, onSave
     <div className="form">
       <textarea className="mono" aria-label="Perintah pemeriksaan" spellCheck={false} style={{ minHeight: 56, fontSize: '.8rem' }} value={command} onChange={(e) => { setCommand(e.target.value); setResult(null); }} />
       <div className="row">
-        <input type="number" step="any" className="input-sm" placeholder="warn" aria-label="Ambang peringatan" value={w} onChange={(e) => setW(e.target.value)} />
-        <input type="number" step="any" className="input-sm" placeholder="kritis" aria-label="Ambang kritis" value={c} onChange={(e) => setC(e.target.value)} />
+        <input type="number" step="any" className="input-sm" placeholder="Major" aria-label="Batas Major" value={w} onChange={(e) => setW(e.target.value)} />
+        <input type="number" step="any" className="input-sm" placeholder="Critical" aria-label="Batas Critical" value={c} onChange={(e) => setC(e.target.value)} />
         <Button icon={IconBolt} disabled={!command.trim()} onClick={() => run.mutateAsync()}>Coba</Button>
         <Button primary icon={IconCheck} disabled={!command.trim() || !result || result.evaluation.status === 'unknown'} title={!result ? 'Coba perintahnya dulu' : result.evaluation.status === 'unknown' ? 'Perintah belum menghasilkan angka' : undefined} onClick={() => onSave(command.trim(), w, c)}>{saveLabel}</Button>
         {alt && <Button icon={IconScale} disabled={!command.trim() || !result || result.evaluation.status === 'unknown'} title="Simpan sebagai standar: berlaku untuk semua server yang punya layanan ini" onClick={() => alt.onSave(command.trim(), w, c)}>{alt.label}</Button>}

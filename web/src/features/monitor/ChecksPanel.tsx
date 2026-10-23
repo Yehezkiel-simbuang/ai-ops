@@ -18,7 +18,7 @@ import { ago } from '@/lib/format';
 import { toast } from '@/lib/toast';
 
 const STATUS: Record<string, [Tone, IconType, string]> = {
-  ok: ['ok', IconOk, 'Normal'], warn: ['warn', IconAlert, 'Peringatan'], crit: ['bad', IconBad, 'Kritis'], unknown: ['mute', IconAlert, 'Tidak terbaca'], belum: ['mute', IconTimer, 'Belum dijalankan']
+  ok: ['ok', IconOk, 'Normal'], minor: ['acc', IconAlert, 'Minor'], warn: ['warn', IconAlert, 'Major'], crit: ['bad', IconBad, 'Critical'], unknown: ['mute', IconAlert, 'Tidak terbaca'], belum: ['mute', IconTimer, 'Belum dijalankan']
 };
 /** Tipe pemeriksaan yang menghasilkan angka (punya ambang peringatan/kritis). */
 const isNumeric = (type: string) => (type.includes('_') && !/ping|conf|health|running|sync|alarms/.test(type)) || ['http', 'proc_count', 'custom'].includes(type);
@@ -131,7 +131,7 @@ function AddCheckPanel({ serverId, meta, onClose }: { serverId: number; meta: Ch
   );
 }
 
-const SEVERITY: Record<string, number> = { crit: 4, warn: 3, unknown: 2, ok: 1, belum: 0 };
+const SEVERITY: Record<string, number> = { crit: 5, warn: 4, minor: 3, unknown: 2, ok: 1, belum: 0 };
 
 /** Kelompok pemeriksaan menurut paket (kolom pack, atau awalan nama sebelum titik dua). Urutan kemunculan dipertahankan. */
 export function groupChecks(checks: Check[], packs: PackMeta[] = []): Array<{ key: string; label: string; checks: Check[]; worst: string }> {
@@ -154,7 +154,7 @@ function CheckGroup({ label, checks, worst, serverId, open }: { label: string; c
       <summary>
         <b>{label}</b><span className="lbl">{checks.length} pemeriksaan{enabled < checks.length ? `, ${checks.length - enabled} mati` : ''}</span>
         <span className="grow" />
-        {count('crit') > 0 && <Badge tone="bad">{count('crit')} kritis</Badge>}{count('warn') > 0 && <Badge tone="warn">{count('warn')} peringatan</Badge>}
+        {count('crit') > 0 && <Badge tone="bad">{count('crit')} Critical</Badge>}{count('warn') > 0 && <Badge tone="warn">{count('warn')} Major</Badge>}{count('minor') > 0 && <Badge tone="acc">{count('minor')} Minor</Badge>}
         {enabled === 0 ? <Badge tone="mute">dimatikan</Badge> : <Badge tone={tone} icon={Icon}>{text}</Badge>}
         <Button icon={IconTrash} aria-label={`Hapus kelompok ${label}`} title="Hapus seluruh kelompok" onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirm(`Hapus seluruh kelompok "${label}" (${checks.length} pemeriksaan) beserta riwayatnya? Bisa ditambahkan lagi lewat Deteksi paket.`, 'Hapus semuanya')) await removeAll.mutateAsync(); }} />
       </summary>

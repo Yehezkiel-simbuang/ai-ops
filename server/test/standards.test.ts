@@ -8,16 +8,17 @@ const metrics = (over: Record<string, number> = {}) => ({ nproc: 4, load5: 1, me
 const alert = (m: Record<string, number>, limits = {}) => Object.fromEntries(Monitor.evaluate(m, {}, limits).map((c) => [c.key, c]));
 
 describe('evaluate dengan standar', () => {
-  it('bawaan: beban 1,5x dan 3x core, memori 10% dan 5%, disk 85% dan 95%, swap tanpa tingkat kritis', () => {
-    expect(alert(metrics({ load5: 6.5 })).load).toMatchObject({ on: true, level: 'peringatan' }); expect(alert(metrics({ load5: 12.5 })).load).toMatchObject({ on: true, level: 'kritis' }); expect(alert(metrics({ load5: 6 })).load!.on).toBe(false);
-    expect(alert(metrics({ mem_avail_pct: 9 })).mem).toMatchObject({ on: true, level: 'peringatan' }); expect(alert(metrics({ mem_avail_pct: 4 })).mem!.level).toBe('kritis');
-    expect(alert(metrics({ disk_root_pct: 90 })).disk).toMatchObject({ on: true, level: 'peringatan' }); expect(alert(metrics({ disk_root_pct: 96 })).disk!.level).toBe('kritis');
-    expect(alert(metrics({ swap_used_mb: 2000 })).swap).toMatchObject({ on: true, level: 'peringatan' });
+  it('bawaan: beban 1x, 1,5x, 3x core; memori 20%, 10%, 5%; disk 75%, 85%, 95%; swap tanpa tingkat critical (minor, major, critical)', () => {
+    expect(alert(metrics({ load5: 6.5 })).load).toMatchObject({ on: true, level: 'major' }); expect(alert(metrics({ load5: 12.5 })).load).toMatchObject({ on: true, level: 'critical' }); expect(alert(metrics({ load5: 6 })).load).toMatchObject({ on: true, level: 'minor' }); expect(alert(metrics({ load5: 4 })).load!.on).toBe(false);   // minor mulai di atas 1x core
+    expect(alert(metrics({ mem_avail_pct: 9 })).mem).toMatchObject({ on: true, level: 'major' }); expect(alert(metrics({ mem_avail_pct: 4 })).mem!.level).toBe('critical'); expect(alert(metrics({ mem_avail_pct: 15 })).mem).toMatchObject({ on: true, level: 'minor' }); expect(alert(metrics({ mem_avail_pct: 25 })).mem!.on).toBe(false);
+    expect(alert(metrics({ disk_root_pct: 90 })).disk).toMatchObject({ on: true, level: 'major' }); expect(alert(metrics({ disk_root_pct: 96 })).disk!.level).toBe('critical'); expect(alert(metrics({ disk_root_pct: 80 })).disk).toMatchObject({ on: true, level: 'minor' }); expect(alert(metrics({ disk_root_pct: 70 })).disk!.on).toBe(false);
+    expect(alert(metrics({ swap_used_mb: 2000 })).swap).toMatchObject({ on: true, level: 'major' }); expect(alert(metrics({ swap_used_mb: 700 })).swap).toMatchObject({ on: true, level: 'minor' });
   });
-  it('ambang yang diubah menimpa bawaan; beban dikalikan jumlah core; memori (arah turun) tetap benar', () => {
-    const a = alert(metrics({ disk_root_pct: 60, load5: 5, mem_avail_pct: 25, swap_used_mb: 300 }), { disk: { warn: 50, crit: 70 }, load: { warn: 1, crit: 2 }, mem: { warn: 30, crit: 20 }, swap: { warn: 100, crit: 200 } });
-    expect(a.disk).toMatchObject({ on: true, level: 'peringatan' }); expect(a.load).toMatchObject({ on: true, level: 'peringatan' });   // 5 > 1 x 4 core, tetapi 5 < 2 x 4 core
-    expect(a.mem).toMatchObject({ on: true, level: 'peringatan' }); expect(a.swap).toMatchObject({ on: true, level: 'kritis' });
+  it('batas yang diubah menimpa bawaan; beban dikalikan jumlah core; memori (arah turun) tetap benar; tanpa minor berarti tidak ada tingkat minor', () => {
+    const a = alert(metrics({ disk_root_pct: 60, load5: 5, mem_avail_pct: 25, swap_used_mb: 300 }), { disk: { minor: null, warn: 50, crit: 70 }, load: { minor: null, warn: 1, crit: 2 }, mem: { minor: null, warn: 30, crit: 20 }, swap: { minor: null, warn: 100, crit: 200 } });
+    expect(a.disk).toMatchObject({ on: true, level: 'major' }); expect(a.load).toMatchObject({ on: true, level: 'major' });   // 5 > 1 x 4 core, tetapi 5 < 2 x 4 core
+    expect(a.mem).toMatchObject({ on: true, level: 'major' }); expect(a.swap).toMatchObject({ on: true, level: 'critical' });
+    expect(alert(metrics({ disk_root_pct: 80 }), { disk: { minor: null, warn: 85, crit: 95 } }).disk!.on).toBe(false);
   });
 });
 
@@ -79,7 +80,7 @@ describe('standar global lewat API', () => {
     expect((await bad(a)).filter((x: { title: string }) => x.title.includes('koneksi terpakai'))).toHaveLength(0);
     await h.call('PUT', '/api/standards', { key: KEY, warn: 60, crit: 99, confirm: 1 });
     for (const id of [a, b]) await h.call('POST', `/api/servers/${id}/check`);
-    for (const id of [a, b]) expect((await bad(id)).filter((x: { title: string; level: string }) => x.title.includes('koneksi terpakai') && x.level === 'peringatan')).toHaveLength(1);
+    for (const id of [a, b]) expect((await bad(id)).filter((x: { title: string; level: string }) => x.title.includes('koneksi terpakai') && x.level === 'major')).toHaveLength(1);
   });
   it('daftar pemeriksaan server menampilkan nilai yang BERLAKU dan asalnya; mengubah ambang pemeriksaan paket dari server ditolak (arahkan ke standar)', async () => {
     await h.call('PUT', '/api/standards', { key: KEY, warn: 55, crit: 85 });
@@ -107,7 +108,7 @@ describe('usulan AI untuk standar', () => {
       for (let i = 1; i <= 40; i++) await h.db.exec('INSERT INTO metrics(server_id,ts,name,value) VALUES($1,$2,$3,$4)', [sid, now - i * 1000, 'disk_root_pct', 50 + (i % 10)]);
       let prompt = '';
       Standards.configure({ llm: (async (_r: string, req: { messages: Array<{ content: string }> }) => { prompt = req.messages[0]!.content; return { text: JSON.stringify({ suggestions: [
-        { key: 'base:disk', warn: 75, crit: 90, why: 'p95 sekitar 59' }, { key: 'base:mem', warn: 10, crit: 5, why: 'tetap' }, { key: 'base:io', warn: 60, crit: 30, why: 'terbalik' }, { key: 'tidak-ada', warn: 1, crit: 2, why: '' }
+        { key: 'base:disk', minor: 70, warn: 75, crit: 90, why: 'p95 sekitar 59' }, { key: 'base:mem', minor: 20, warn: 10, crit: 5, why: 'tetap' }, { key: 'base:io', minor: 10, warn: 60, crit: 30, why: 'terbalik' }, { key: 'tidak-ada', warn: 1, crit: 2, why: '' }
       ] }), usage: { input: 1, output: 1 } }; }) as never });
       const r = await h.call('POST', '/api/standards/suggest', {}); expect(r.status).toBe(200);
       expect(prompt).toContain('base:disk'); expect(prompt).toMatch(/40 sampel dari 1 server/); expect(prompt).toContain('belum ada');

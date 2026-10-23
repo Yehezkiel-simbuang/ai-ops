@@ -16,7 +16,20 @@ import { post, put } from '@/lib/api';
 import { ago, dateTime } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { ChecksPanel } from './ChecksPanel';
-import { isProblem, summarize } from './health';
+import { isProblem, summarize, type Problem } from './health';
+
+function ProblemList({ items, onAck }: { items: Problem[]; onAck: (alertId: number) => unknown }) {
+  return (
+    <List>{items.map((p) => (
+      <Item key={p.id} top title={p.title} sub={[`${p.detail}${p.ts ? ` | ${ago(p.ts)}` : ''}`]}>
+        <LevelBadge level={p.level} />
+        {p.unconfirmed && <Badge tone="mute">belum dikonfirmasi</Badge>}
+        {p.alertId !== undefined && !p.acked && <Button onClick={() => onAck(p.alertId!)}>Tandai dilihat</Button>}
+        {p.acked && <Badge tone="mute">sudah dilihat</Badge>}
+      </Item>
+    ))}</List>
+  );
+}
 
 function MonitorBody({ id, d }: { id: number; d: MonitorView }) {
   const s = d.server, refresh = [['servers', id, 'monitor'], ['overview'], ['servers']], sum = summarize(d);
@@ -27,21 +40,14 @@ function MonitorBody({ id, d }: { id: number; d: MonitorView }) {
   return (
     <>
       <VerdictBanner label="Kondisi server" verdict={sum.verdict} headline={sum.headline} detail={sum.detail}
-        facts={<>{d.checks.length > 0 && `${sum.counts.ok} normal${sum.counts.warn ? `, ${sum.counts.warn} peringatan` : ''}${sum.counts.crit ? `, ${sum.counts.crit} kritis` : ''}${sum.counts.off ? `, ${sum.counts.off} dimatikan` : ''} | `}terakhir terlihat {ago(s.last_seen)}{s.os_info ? ` | ${s.os_info}` : ''}</>}
+        facts={<>{d.checks.length > 0 && `${sum.counts.ok} normal${sum.counts.minor ? `, ${sum.counts.minor} Minor` : ''}${sum.counts.major ? `, ${sum.counts.major} Major` : ''}${sum.counts.crit ? `, ${sum.counts.crit} Critical` : ''}${sum.counts.off ? `, ${sum.counts.off} dimatikan` : ''} | `}terakhir terlihat {ago(s.last_seen)}{s.os_info ? ` | ${s.os_info}` : ''}</>}
         aside={<label className="checkline"><input type="checkbox" checked={s.monitor_on} onChange={(e) => toggle.mutate(e.target.checked)} /><span>Pantau tiap {s.monitor_every} detik</span></label>} />
 
-      <Section title={sum.problems.length ? `Perlu ditangani (${sum.problems.length})` : 'Perlu ditangani'} icon={IconBell}>
-        {sum.problems.length ? (
-          <List>{sum.problems.map((p) => (
-            <Item key={p.id} top title={p.title} sub={[`${p.detail}${p.ts ? ` | ${ago(p.ts)}` : ''}`]}>
-              <LevelBadge level={p.level} />
-              {p.unconfirmed && <Badge tone="mute">belum dikonfirmasi</Badge>}
-              {p.alertId !== undefined && !p.acked && <Button onClick={() => ack.mutateAsync(p.alertId!)}>Tandai dilihat</Button>}
-              {p.acked && <Badge tone="mute">sudah dilihat</Badge>}
-            </Item>
-          ))}</List>
-        ) : <p className="lbl calm">Tidak ada yang perlu ditangani sekarang.</p>}
+      <Section title={sum.urgent.length ? `Perlu ditangani (${sum.urgent.length})` : 'Perlu ditangani'} icon={IconBell}>
+        {sum.urgent.length ? <ProblemList items={sum.urgent} onAck={(id) => ack.mutateAsync(id)} /> : <p className="lbl calm">Tidak ada yang perlu ditangani sekarang.</p>}
       </Section>
+      {sum.minor.length > 0 && <Fold title="Minor" hint={`${sum.minor.length} | lihat kalau sempat`}><ProblemList items={sum.minor} onAck={(id) => ack.mutateAsync(id)} /></Fold>}
+      {sum.info.length > 0 && <Fold title="Info" hint={`${sum.info.length} | hanya jejak, tanpa tindakan`}><ProblemList items={sum.info} onAck={(id) => ack.mutateAsync(id)} /></Fold>}
 
       <Section title="Resource server" icon={IconPulse}>
         <div className="sparks">
@@ -52,7 +58,7 @@ function MonitorBody({ id, d }: { id: number; d: MonitorView }) {
         </div>
       </Section>
 
-      <Fold title="Pemeriksaan layanan di dalam server" hint={d.checks.length ? `${d.checks.length} pemeriksaan${checksBad ? `, ${checksBad} bermasalah` : ', semua normal'}` : 'belum ada'} open={d.checks.length === 0}>
+      <Fold title="Pemeriksaan layanan di dalam server" hint={d.checks.length ? `${d.checks.length} pemeriksaan${checksBad ? `, ${checksBad} tidak normal` : ', semua normal'}` : 'belum ada'} open={d.checks.length === 0}>
         <ChecksPanel serverId={id} checks={d.checks} />
       </Fold>
       <Fold title="Riwayat peringatan" hint={sum.history.length ? `${sum.history.length} sudah selesai` : 'belum ada'}>

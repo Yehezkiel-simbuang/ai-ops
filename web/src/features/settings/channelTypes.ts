@@ -26,6 +26,7 @@ export const CHANNEL_TYPES: Record<ChannelType, ChannelTypeInfo> = {
   }
 };
 
-export const LEVELS: Array<[NotifyLevel, string]> = [['kritis', 'Hanya kritis dan permintaan persetujuan'], ['peringatan', 'Peringatan dan kritis'], ['semua', 'Semua kejadian']];
+/** Tingkat terendah yang dikirim SEGERA. Minor masuk ringkasan harian dan Info hanya tercatat, kecuali kanal diatur lebih rendah. */
+export const LEVELS: Array<[NotifyLevel, string]> = [['major', 'Major dan Critical (disarankan)'], ['critical', 'Hanya Critical dan permintaan persetujuan'], ['minor', 'Minor, Major, dan Critical'], ['info', 'Semua, termasuk Info']];
 
 export const defaultConfig = (type: ChannelType): Record<string, string> => Object.fromEntries(CHANNEL_TYPES[type].fields.map((f) => [f.key, f.default ?? '']));

@@ -22,18 +22,18 @@ describe('penilaian dan keadaan', () => {
   const DAY = 864e5, now = 1_000_000_000_000;
   it('sehat, lambat, status salah, tak terjangkau, dan sertifikat', () => {
     expect(Web.judge(rule, ok, now).severity).toBeNull();
-    expect(Web.judge(rule, { ...ok, ms: 1500 }, now)).toMatchObject({ severity: 'peringatan', title: 'Lambat (1500 ms)' });
-    expect(Web.judge(rule, { ...ok, code: 500 }, now)).toMatchObject({ severity: 'kritis', title: 'Status 500' });
+    expect(Web.judge(rule, { ...ok, ms: 1500 }, now)).toMatchObject({ severity: 'minor', title: 'Lambat (1500 ms)' });
+    expect(Web.judge(rule, { ...ok, code: 500 }, now)).toMatchObject({ severity: 'critical', title: 'Status 500' });
     expect(Web.judge(rule, { ...ok, code: 301 }, now).severity).toBeNull();   // pengalihan tanpa tujuan akhir tetap dianggap hidup
-    expect(Web.judge({ ...rule, expect_status: 204 }, ok, now).severity).toBe('kritis');
-    expect(Web.judge(rule, { ok: false, code: null, ms: 10000, error: 'Waktu habis (10000 ms)', certExpires: null }, now)).toMatchObject({ severity: 'kritis', title: 'Tidak bisa dijangkau' });
-    expect(Web.judge(rule, { ...ok, certExpires: now + 10 * DAY }, now)).toMatchObject({ severity: 'peringatan' });
-    expect(Web.judge(rule, { ...ok, certExpires: now + 2 * DAY }, now).severity).toBe('kritis');
+    expect(Web.judge({ ...rule, expect_status: 204 }, ok, now).severity).toBe('critical');
+    expect(Web.judge(rule, { ok: false, code: null, ms: 10000, error: 'Waktu habis (10000 ms)', certExpires: null }, now)).toMatchObject({ severity: 'critical', title: 'Tidak bisa dijangkau' });
+    expect(Web.judge(rule, { ...ok, certExpires: now + 10 * DAY }, now)).toMatchObject({ severity: 'major' });
+    expect(Web.judge(rule, { ...ok, certExpires: now + 2 * DAY }, now).severity).toBe('critical');
     expect(Web.judge(rule, { ...ok, certExpires: now - DAY }, now).title).toContain('sejak 1 hari lalu');
     expect(Web.judge(rule, { ...ok, certExpires: now + 60 * DAY }, now).severity).toBeNull();
   });
   it('notifikasi hanya setelah pemeriksaan buruk berturut-turut, sekali saat naik, dan sekali saat pulih', () => {
-    const warn: Web.Verdict = { severity: 'peringatan', title: 't', detail: '' }, crit: Web.Verdict = { ...warn, severity: 'kritis' }, good: Web.Verdict = { severity: null, title: 'Sehat', detail: '' };
+    const warn: Web.Verdict = { severity: 'major', title: 't', detail: '' }, crit: Web.Verdict = { ...warn, severity: 'critical' }, good: Web.Verdict = { severity: null, title: 'Sehat', detail: '' };
     let s = { bad_count: 0, alert_level: '' as string };
     const step = (v: Web.Verdict, confirm = 2) => { const t = Web.transition(s, v, confirm); s = { bad_count: t.bad_count, alert_level: t.alert_level }; return t.notify; };
     expect(step(crit)).toBeNull(); expect(step(crit)).toBe('baru'); expect(step(crit)).toBeNull();   // tidak berulang
@@ -124,11 +124,11 @@ describe('pengumpul Vercel', () => {
     expect(Vercel.deploymentVerdict([], now)).toMatchObject({ severity: null, title: 'Belum ada deploy produksi' });
     expect(Vercel.deploymentVerdict([dep({})], now)).toMatchObject({ severity: null, title: 'Sehat' });
     expect(Vercel.deploymentVerdict([dep({ uid: 'lama', created: now - 9e6 }), dep({ uid: 'baru', readyState: 'ERROR', errorCode: 'BUILD_FAILED', errorMessage: 'Build gagal', created: now - 1000 })], now))
-      .toMatchObject({ severity: 'kritis', title: 'Deploy produksi terakhir gagal', detail: expect.stringContaining('BUILD_FAILED') });
+      .toMatchObject({ severity: 'critical', title: 'Deploy produksi terakhir gagal', detail: expect.stringContaining('BUILD_FAILED') });
     expect(Vercel.deploymentVerdict([dep({}), dep({ uid: 'x', readyState: 'CANCELED', created: now - 10 })], now).severity).toBeNull();   // yang dibatalkan tidak dianggap terbaru
     expect(Vercel.deploymentVerdict([dep({ readyState: 'BUILDING', created: now - 5 * 60_000 })], now).severity).toBeNull();
-    expect(Vercel.deploymentVerdict([dep({ readyState: 'BUILDING', created: now - 45 * 60_000 })], now)).toMatchObject({ severity: 'peringatan', title: expect.stringContaining('macet') });
-    expect(Vercel.deploymentVerdict([dep({ readyState: 'BLOCKED' })], now).severity).toBe('peringatan');
+    expect(Vercel.deploymentVerdict([dep({ readyState: 'BUILDING', created: now - 45 * 60_000 })], now)).toMatchObject({ severity: 'major', title: expect.stringContaining('macet') });
+    expect(Vercel.deploymentVerdict([dep({ readyState: 'BLOCKED' })], now).severity).toBe('major');
   });
 
   let h: Harness, calls: Array<{ url: string; auth: string }> = [], reply: { status: number; body: unknown } = { status: 200, body: { deployments: [dep({ created: Date.now() - 1000 })] } };
@@ -156,7 +156,7 @@ describe('pengumpul Vercel', () => {
   it('deploy gagal memberi peringatan kritis; token ditolak dijelaskan; ganti token tidak membocorkan yang lama', async () => {
     const c = (await h.call('POST', '/api/webchecks', body({ name: 'Gagal' }))).json, run = async () => (await h.call('POST', `/api/webchecks/${c.id}/run`)).json;
     reply = { status: 200, body: { deployments: [dep({ readyState: 'ERROR', errorCode: 'BUILD_FAILED', created: Date.now() })] } };
-    expect((await run()).verdict).toMatchObject({ severity: 'kritis', title: 'Deploy produksi terakhir gagal' });
+    expect((await run()).verdict).toMatchObject({ severity: 'critical', title: 'Deploy produksi terakhir gagal' });
     reply = { status: 401, body: {} }; expect((await run()).verdict.title).toBe('Token Vercel ditolak');
     reply = { status: 404, body: {} }; expect((await run()).verdict.title).toBe('Proyek Vercel tidak ditemukan');
     const up = (await h.call('PATCH', `/api/webchecks/${c.id}`, { vercel: { token: 'token-baru-yang-panjang' } })).json; expect(up).toMatchObject({ url: 'vercel:tokoku', has_token: true });

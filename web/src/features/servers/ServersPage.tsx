@@ -9,6 +9,7 @@ import { Async } from '@/components/ui/Async';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Field, useForm } from '@/components/ui/Field';
+import { AgentFleet } from '@/features/agent/AgentFleet';
 import { DataGrid, type Column } from '@/components/ui/DataGrid';
 import { Empty, Hint, PageHead } from '@/components/ui/Layout';
 import { Modal } from '@/components/ui/Modal';
@@ -150,6 +151,7 @@ export function ServersPage() {
       <PageHead title="Server" icon={IconServer}><Button primary icon={IconPlus} onClick={() => setDialog('baru')}>Tambah server</Button></PageHead>
       <Async query={query}>{(servers) => servers.length ? (
         <>
+          <AgentFleet />
           {servers.length > 5 && <div className="row" style={{ marginBottom: 8 }}><input type="search" aria-label="Cari server" placeholder="Cari nama atau alamat..." style={{ maxWidth: 360, width: '100%' }} value={search} onChange={(e) => setSearch(e.target.value)} /></div>}
           <DataGrid label="Daftar server" rows={servers.filter((s) => !needle || `${s.name} ${s.host} ${s.username}`.toLowerCase().includes(needle))} columns={columns(setDialog)} rowKey={(s) => s.id}
             storageKey="aiops.server.size" defaultSort={{ id: 'status', dir: 'asc' }} resetKey={needle} empty="Tidak ada server yang cocok dengan pencarian." />

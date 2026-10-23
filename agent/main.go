@@ -61,8 +61,8 @@ func main() {
 			switch {
 			case r.Unknown:
 				state = "tidak terbaca"
-			case r.Crit:
-				state = "KRITIS"
+			case r.Lvl() != LevelOK:
+				state = r.Lvl().Label()
 			}
 			b, _ := json.Marshal(r.Value)
 			fmt.Printf("%-28s %-14s nilai=%s %s\n", c.Key, state, b, r.Detail)

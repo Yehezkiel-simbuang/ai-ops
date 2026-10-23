@@ -7,6 +7,7 @@ import * as Checks from './checks.js';
 import * as Notify from './notify.js';
 import * as Servers from './servers.js';
 import { allPacks, customPacks, detectCustom } from './custom-packs.js';
+import { rank, type Level } from './levels.js';
 import { BASE_LIMITS, baseLimits, catalogMap, effective, loadOverrides, orderProblem, type Limits } from './standards.js';
 import { forRole, type RoleChat } from './llm.js';
 
@@ -32,20 +33,20 @@ export function parse(out: string): { metrics: Record<string, number>; services:
   return { metrics, services };
 }
 
-export interface Cond { key: string; on: boolean; level: 'kritis' | 'peringatan'; title: string; detail: string }
+export interface Cond { key: string; on: boolean; level: Level; title: string; detail: string }
 export function evaluate(m: Record<string, number>, svc: Record<string, string>, limits: Limits = {}): Cond[] {
   const out: Cond[] = [], cpu = m.nproc || 1;
-  const add = (key: string, on: boolean, level: 'kritis' | 'peringatan', title: string, detail: string) => out.push({ key, on, level, title, detail });
+  const add = (key: string, on: boolean, level: Level, title: string, detail: string) => out.push({ key, on, level, title, detail });
   // ambang: bawaan di BASE_LIMITS, ditimpa pengaturan server. Beban dinyatakan sebagai kelipatan jumlah core.
-  const L = (k: string) => ({ warn: limits[k] ? limits[k]!.warn : BASE_LIMITS[k]!.warn, crit: limits[k] ? limits[k]!.crit : BASE_LIMITS[k]!.crit });
+  const L = (k: string) => ({ minor: limits[k] ? limits[k]!.minor : BASE_LIMITS[k]!.minor, warn: limits[k] ? limits[k]!.warn : BASE_LIMITS[k]!.warn, crit: limits[k] ? limits[k]!.crit : BASE_LIMITS[k]!.crit });
   const hit = (k: string, v: number, th: number | null) => th != null && (BASE_LIMITS[k]!.dir === 'lt' ? v < th : v > th);
-  const eval_ = (k: string, v: number, scale = 1) => { const l = L(k), w = l.warn == null ? null : l.warn * scale, c = l.crit == null ? null : l.crit * scale; return { on: hit(k, v, w), level: (hit(k, v, c) ? 'kritis' : 'peringatan') as 'kritis' | 'peringatan' }; };
+  const eval_ = (k: string, v: number, scale = 1) => { const l = L(k), sc = (x: number | null) => (x == null ? null : x * scale); const lv: Level | null = hit(k, v, sc(l.crit)) ? 'critical' : hit(k, v, sc(l.warn)) ? 'major' : hit(k, v, sc(l.minor)) ? 'minor' : null; return { on: lv !== null, level: lv ?? 'major' }; };   // warn = batas major, crit = critical
   if (m.load5 != null) { const e = eval_('load', m.load5, cpu); add('load', e.on, e.level, 'Beban CPU tinggi', `load 5 menit ${m.load5} pada ${cpu} core`); }
   if (m.mem_avail_pct != null) { const e = eval_('mem', m.mem_avail_pct); add('mem', e.on, e.level, 'Memori tersedia menipis', `tersedia ${m.mem_avail_pct}% dari ${m.mem_total_mb} MB`); }
   if (m.swap_used_mb != null) { const e = eval_('swap', m.swap_used_mb); add('swap', e.on, e.level, 'Swap terpakai banyak', `${m.swap_used_mb} MB swap terpakai`); }
   if (m.disk_root_pct != null) { const e = eval_('disk', m.disk_root_pct); add('disk', e.on, e.level, 'Disk root hampir penuh', `${m.disk_root_pct}% terpakai`); }
   if (m.io_psi10 != null) { const e = eval_('io', m.io_psi10); add('io', e.on, e.level, 'Tekanan I/O disk tinggi', `PSI io (some) 10 dtk = ${m.io_psi10}%`); }
-  for (const s of Object.keys(svc)) add(`svc:${s}`, svc[s] !== 'active', 'kritis', `Layanan ${s} tidak aktif`, `status: ${svc[s]}`);
+  for (const s of Object.keys(svc)) add(`svc:${s}`, svc[s] !== 'active', 'critical', `Layanan ${s} tidak aktif`, `status: ${svc[s]}`);
   return out;
 }
 
@@ -59,7 +60,7 @@ export async function syncAlerts(serverId: number, conds: Array<Cond | { key: st
       if (row) { created.push(x); Notify.alertOpened(row as never, name); }
     } else if (c.on && open) {
       const x = c as Cond; await db().exec('UPDATE alerts SET level=$1, detail=$2 WHERE id=$3', [x.level, x.detail, open.id]);
-      if (open.level !== 'kritis' && x.level === 'kritis') { await db().exec('UPDATE alerts SET notified_ts=$1 WHERE id=$2', [Date.now(), open.id]); Notify.alertOpened({ ...open, level: x.level, detail: x.detail } as never, name); }   // naik ke kritis: kabari
+      if (rank(x.level) > rank(open.level)) Notify.alertOpened({ ...open, level: x.level, detail: x.detail } as never, name);   // tingkat naik: kabari lagi sesuai aturan tingkat barunya
     } else if (!c.on && open) { await db().exec('UPDATE alerts SET resolved=true WHERE id=$1', [open.id]); Notify.alertResolved(open as never, name); }
   }
   return created;
@@ -70,14 +71,14 @@ export async function check(serverId: number | string) {
   const now = Date.now(), r = await Servers.run(s, script(s), { timeoutMs: 25_000 });
   if (r.exitCode !== 0 && !r.stdout.trim()) {
     await db().exec('UPDATE servers SET last_status=$1 WHERE id=$2', ['tidak terjangkau', s.id]);
-    const created = await syncAlerts(s.id, [{ key: 'unreachable', on: true, level: 'kritis', title: 'Server tidak terjangkau', detail: (r.stderr || 'tanpa keluaran').trim().split('\n').slice(-1)[0]!.slice(0, 200) }], 'resource');
+    const created = await syncAlerts(s.id, [{ key: 'unreachable', on: true, level: 'critical', title: 'Server tidak terjangkau', detail: (r.stderr || 'tanpa keluaran').trim().split('\n').slice(-1)[0]!.slice(0, 200) }], 'resource');
     return { ok: false as const, created };
   }
   const p = parse(r.stdout);
   await db().tx(async (t) => { for (const [k, v] of Object.entries(p.metrics)) await t.exec('INSERT INTO metrics(server_id,ts,name,value) VALUES($1,$2,$3,$4)', [s.id, now, k, v]); });
   const created = await syncAlerts(s.id, [...evaluate(p.metrics, p.services, await baseLimits()), { key: 'unreachable', on: false as const }], 'resource');
   const svc = await runChecks(s); created.push(...svc.created);
-  const open = (await db().one<{ c: number }>('SELECT COUNT(*)::int AS c FROM alerts WHERE server_id=$1 AND NOT resolved', [s.id]))!.c;
+  const open = (await db().one<{ c: number }>("SELECT COUNT(*)::int AS c FROM alerts WHERE server_id=$1 AND NOT resolved AND level IN ('major','critical')", [s.id]))!.c;
   await db().exec('UPDATE servers SET last_seen=$1, last_status=$2 WHERE id=$3', [now, open ? 'peringatan' : 'ok', s.id]);
   if (created.length && (await metaGet('auto_report')) === '1') void maybeAutoReport(s.id).catch((e) => log().warn({ err: (e as Error).message }, 'laporan otomatis gagal'));
   return { ok: true as const, metrics: p.metrics, services: p.services, created, checks: svc.results };
@@ -176,9 +177,9 @@ export async function runChecks(s: Servers.ServerRow): Promise<{ created: Cond[]
   if (r.exitCode === 255 && !r.stdout.trim()) return out;   // server tidak terjangkau: sudah ditangani pemeriksaan resource
   const parsed = Checks.parseBatch(r.stdout), now = Date.now(), conds: Cond[] = [], overrides = await loadOverrides(), catalog = await catalogMap();
   for (const raw of checks as any[]) {
-    const eff = effective(raw, overrides, catalog), c: any = { ...raw, warn: eff.warn, crit: eff.crit, confirm: eff.confirm };   // ambang dan konfirmasi dari standar global bila pemeriksaan berasal dari paket
+    const eff = effective(raw, overrides, catalog), c: any = { ...raw, minor: eff.minor, warn: eff.warn, crit: eff.crit, confirm: eff.confirm };   // ambang dan konfirmasi dari standar global bila pemeriksaan berasal dari paket
     const res = parsed[String(c.id)] ?? { exitCode: 255, stdout: '', stderr: 'tidak ada hasil (skrip terpotong?)', timedOut: false }, ev = Checks.evaluate(c as never, res);
-    const bad_ = ev.status !== 'ok', fails = bad_ ? c.fail_count + 1 : 0, level = ev.status === 'crit' ? 'kritis' : 'peringatan', on = bad_ && fails >= (c.confirm || 1);
+    const bad_ = ev.status !== 'ok', fails = bad_ ? c.fail_count + 1 : 0, level: Level = ev.status === 'crit' ? 'critical' : ev.status === 'warn' ? 'major' : 'minor', on = bad_ && fails >= (c.confirm || 1);
     await db().exec('UPDATE checks SET last_status=$1, last_value=$2, last_raw=COALESCE($3, last_raw), last_detail=$4, last_run=$5, fail_count=$6 WHERE id=$7', [ev.status, ev.value, ev.raw, ev.detail || '', now, fails, c.id]);
     if (ev.value != null) await db().exec('INSERT INTO metrics(server_id,ts,name,value) VALUES($1,$2,$3,$4)', [s.id, now, `chk:${c.id}`, ev.value]);
     conds.push({ key: `chk:${c.id}`, on, level, title: c.name, detail: ev.detail || ev.status });
@@ -213,7 +214,7 @@ async function tick(): Promise<void> {
       busy.add(s.id); mark.set(s.id, now);
       void check(s.id).catch((e) => log().warn({ err: (e as Error).message, server: s.name }, 'pemeriksaan gagal')).finally(() => busy.delete(s.id));
     }
-    await Notify.reminders();
+    await Notify.reminders(); await Notify.releaseDeferred();
     for (const h of hooks) { try { await h(); } catch (e) { log().warn({ err: (e as Error).message }, 'hook penjadwal gagal'); } }
     if (now - lastPurge > 6 * 3600e3) { lastPurge = now; await maintenance(now); }
   } catch (e) { log().error({ err: (e as Error).message }, 'tick penjadwal gagal'); } finally { ticking = false; }

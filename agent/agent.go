@@ -15,14 +15,14 @@ import (
 	"time"
 )
 
-// Event adalah satu-satunya jenis data yang dikirim agen selain detak jantung: perubahan status KRITIS.
+// Event adalah satu-satunya jenis data yang dikirim agen selain detak jantung: perubahan status (tingkat info, minor, major, critical).
 type Event struct {
 	ID       string    `json:"id"`
 	Type     string    `json:"type"` // open | still_open | resolved
 	Key      string    `json:"key"`
 	Title    string    `json:"title"`
 	Kind     string    `json:"kind"`
-	Severity string    `json:"severity"` // selalu "critical"
+	Severity string    `json:"severity"` // info | minor | major | critical
 	Value    *float64  `json:"value,omitempty"`
 	Detail   string    `json:"detail"`
 	TS       int64     `json:"ts"`
@@ -43,6 +43,7 @@ type Agent struct {
 	version  string
 	started  time.Time
 	sys      Sys
+	tune     *Tuning
 
 	mu         sync.Mutex
 	failN      int
@@ -55,6 +56,8 @@ func NewAgent(cfg Config, sys Sys, run Runner, client *Client, version string, l
 	host, _ := os.Hostname()
 	a := &Agent{cfg: cfg, sys: sys, run: run, client: client, version: version, logf: logf, hostname: host, now: time.Now, started: time.Now(),
 		states: map[string]*CheckState{}, pollWake: make(chan struct{}, 1)}
+	a.tune = NewTuning(cfg.StateDir)
+	cfg.tune, a.cfg = a.tune, cfg
 	a.checks = BuildChecks(cfg, sys, run)
 	spoolPath := ""
 	if cfg.StateDir != "" {
@@ -81,7 +84,11 @@ func (a *Agent) Tick(ctx context.Context) []Event {
 		if tr == TransNone {
 			continue
 		}
-		e := Event{ID: newID(), Type: tr, Key: c.Key, Title: c.Title, Kind: c.Kind, Severity: "critical", Detail: r.Detail, TS: a.now().Unix()}
+		sev := st.Cur
+		if tr == TransResolved {
+			sev = st.Last
+		}
+		e := Event{ID: newID(), Type: tr, Key: c.Key, Title: c.Title, Kind: c.Kind, Severity: sev.String(), Detail: r.Detail, TS: a.now().Unix()}
 		if r.HasValue {
 			v := r.Value
 			e.Value = &v
@@ -156,8 +163,9 @@ func (a *Agent) backoff(err error) error {
 }
 
 type heartbeatResp struct {
-	OK   bool `json:"ok"`
-	Poll bool `json:"poll"`
+	OK   bool   `json:"ok"`
+	Poll bool   `json:"poll"`
+	Cfg  string `json:"cfg"` // versi konfigurasi dari halaman Standar; berbeda dari yang dipegang agen = ambil yang baru
 }
 
 // Heartbeat sangat kecil (sekitar 150 byte): hanya memberi tahu aplikasi bahwa agen hidup dan kunci apa yang sedang kritis.
@@ -177,6 +185,29 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 	a.pollWanted = hr.Poll
 	a.mu.Unlock()
 	a.wakePoll()
+	if hr.Cfg != "" && hr.Cfg != a.tune.Version() {
+		if err := a.SyncConfig(ctx); err != nil {
+			a.logf.Printf("konfigurasi dari aplikasi: %v", err)
+		}
+	}
+	return nil
+}
+
+// SyncConfig mengambil batas dan tingkat kejadian dari halaman Standar. Gagal = batas yang ada (atau lokal) tetap dipakai.
+func (a *Agent) SyncConfig(ctx context.Context) error {
+	code, resp, err := a.client.Do(ctx, "GET", "/agent/v1/config", nil)
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("HTTP %d", code)
+	}
+	var rc RemoteConfig
+	if err := json.Unmarshal(resp, &rc); err != nil || rc.Version == "" {
+		return fmt.Errorf("konfigurasi tidak terbaca")
+	}
+	a.tune.Set(rc)
+	a.logf.Printf("konfigurasi dari aplikasi diperbarui (versi %s)", rc.Version)
 	return nil
 }
 

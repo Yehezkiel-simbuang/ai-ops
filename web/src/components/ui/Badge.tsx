@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { IconType } from '../icons';
 
-export type Tone = 'ok' | 'warn' | 'bad' | 'mute' | 'acc';
+export type Tone = 'ok' | 'warn' | 'bad' | 'mute' | 'acc' | 'info';
 
 interface BadgeProps { tone?: Tone; icon?: IconType; to?: string; href?: string; download?: string; children: ReactNode }
 

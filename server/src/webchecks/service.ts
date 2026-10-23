@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { audit, bad, db, log } from '../context.js';
 import { open, seal } from '../crypto.js';
+import { rank, RANK } from '../levels.js';
 import * as Notify from '../notify.js';
 import { parseTarget, probe, type ProbeResult } from './probe.js';
 import * as Vercel from './vercel.js';
@@ -27,31 +28,31 @@ export const patchSchema = z.object({
 });
 const MIN_INTERVAL: Record<string, number> = { http: 30, vercel: 300 };   // API pihak ketiga dibatasi lajunya: jangan terlalu sering
 
-export interface Verdict { severity: 'kritis' | 'peringatan' | null; title: string; detail: string }
+export interface Verdict { severity: 'critical' | 'major' | 'minor' | null; title: string; detail: string }
 interface Rule { expect_status: number; slow_ms: number }
 
 /** Menilai satu hasil pemeriksaan. Yang terburuk menang; null = sehat. */
 export function judge(rule: Rule, r: ProbeResult, now = Date.now()): Verdict {
-  if (r.code === null) return { severity: 'kritis', title: 'Tidak bisa dijangkau', detail: r.error };
+  if (r.code === null) return { severity: 'critical', title: 'Tidak bisa dijangkau', detail: r.error };
   const statusOk = rule.expect_status > 0 ? r.code === rule.expect_status : r.code >= 200 && r.code < 400;
-  if (!statusOk) return { severity: 'kritis', title: `Status ${r.code}`, detail: rule.expect_status > 0 ? `Diharapkan ${rule.expect_status}, dapat ${r.code}.` : `Status ${r.code} dianggap error.` };
+  if (!statusOk) return { severity: 'critical', title: `Status ${r.code}`, detail: rule.expect_status > 0 ? `Diharapkan ${rule.expect_status}, dapat ${r.code}.` : `Status ${r.code} dianggap error.` };
   if (r.certExpires) {
     const days = Math.floor((r.certExpires - now) / DAY);
-    if (days < 3) return { severity: 'kritis', title: `Sertifikat HTTPS habis ${days < 0 ? 'sejak ' + -days + ' hari lalu' : 'dalam ' + days + ' hari'}`, detail: 'Pengunjung akan melihat peringatan tidak aman. Perpanjang sertifikat.' };
-    if (days < 14) return { severity: 'peringatan', title: `Sertifikat HTTPS habis dalam ${days} hari`, detail: 'Pastikan perpanjangan otomatis berjalan.' };
+    if (days < 3) return { severity: 'critical', title: `Sertifikat HTTPS habis ${days < 0 ? 'sejak ' + -days + ' hari lalu' : 'dalam ' + days + ' hari'}`, detail: 'Pengunjung akan melihat peringatan tidak aman. Perpanjang sertifikat.' };
+    if (days < 14) return { severity: 'major', title: `Sertifikat HTTPS habis dalam ${days} hari`, detail: 'Pastikan perpanjangan otomatis berjalan.' };
   }
-  if (r.ms > rule.slow_ms) return { severity: 'peringatan', title: `Lambat (${r.ms} ms)`, detail: `Batas ${rule.slow_ms} ms.` };
+  if (r.ms > rule.slow_ms) return { severity: 'minor', title: `Lambat (${r.ms} ms)`, detail: `Batas ${rule.slow_ms} ms.` };
   return { severity: null, title: 'Sehat', detail: `${r.code} dalam ${r.ms} ms` };
 }
 
-export interface Transition { bad_count: number; alert_level: '' | 'peringatan' | 'kritis'; notify: 'baru' | 'naik' | 'pulih' | null }
+export interface Transition { bad_count: number; alert_level: '' | 'minor' | 'major' | 'critical'; notify: 'baru' | 'naik' | 'pulih' | null }
 /** Mesin keadaan notifikasi: butuh `confirm` pemeriksaan buruk berturut-turut; pulih memberi tahu sekali. */
 export function transition(prev: { bad_count: number; alert_level: string }, v: Verdict, confirm: number): Transition {
   if (!v.severity) return { bad_count: 0, alert_level: '', notify: prev.alert_level ? 'pulih' : null };
-  const bad_count = prev.bad_count + 1, was = prev.alert_level as '' | 'peringatan' | 'kritis';
+  const bad_count = prev.bad_count + 1, was = prev.alert_level as '' | 'minor' | 'major' | 'critical';
   if (bad_count < confirm) return { bad_count, alert_level: was, notify: null };
   if (!was) return { bad_count, alert_level: v.severity, notify: 'baru' };
-  if (v.severity === 'kritis' && was === 'peringatan') return { bad_count, alert_level: 'kritis', notify: 'naik' };
+  if (rank(v.severity) > rank(was)) return { bad_count, alert_level: v.severity, notify: 'naik' };
   return { bad_count, alert_level: v.severity, notify: null };   // sama atau turun: perbarui tanpa berisik
 }
 
@@ -112,8 +113,8 @@ export async function results(id: number, hours = 24) {
 const notifyFor = (c: { name: string; alert_title: string }, v: Verdict, t: Transition, prevLevel: string): void => {
   const lvl = t.alert_level, title = `Layanan ${c.name}: ${t.notify === 'pulih' ? c.alert_title : v.title}`;
   const m: Notify.Message = t.notify === 'pulih'
-    ? { kind: 'web', level: 'pulih', importance: prevLevel === 'kritis' ? 3 : 2, title, text: 'Kembali normal.' }
-    : { kind: 'web', level: lvl === 'kritis' ? 'kritis' : 'peringatan', importance: lvl === 'kritis' ? 3 : 2, title, text: v.detail };
+    ? { kind: 'web', level: 'resolved', importance: rank(prevLevel) || RANK.major, title, text: 'Kembali normal.' }
+    : { kind: 'web', level: lvl === '' ? 'major' : lvl, importance: rank(lvl) || RANK.major, title, text: v.detail };
   Notify.dispatch(m).catch((e) => log().warn({ err: (e as Error).message }, 'notifikasi cek HTTP gagal'));
 };
 
@@ -123,7 +124,7 @@ export async function runOne(id: number) {
   let r: ProbeResult, v: Verdict, reachedOk: boolean;
   if (c.kind === 'vercel') {
     const out = await Vercel.check(JSON.parse(open(c.provider_enc)) as Vercel.VercelCfg, dep.fetch);
-    v = out.verdict; r = { ok: v.severity !== 'kritis', code: null, ms: out.ms, error: v.severity === 'kritis' ? v.title : '', certExpires: null }; reachedOk = v.severity !== 'kritis';
+    v = out.verdict; r = { ok: v.severity !== 'critical', code: null, ms: out.ms, error: v.severity === 'critical' ? v.title : '', certExpires: null }; reachedOk = v.severity !== 'critical';
   } else {
     r = await dep.probe(c.url, c.timeout_ms); v = judge(c as Rule, r);
     reachedOk = r.code !== null && (c.expect_status > 0 ? r.code === c.expect_status : r.code >= 200 && r.code < 400);

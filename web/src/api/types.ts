@@ -2,6 +2,8 @@
 
 export interface User { id: number; username: string; mustChange?: boolean }
 
+/** Tingkat keparahan, dari paling ringan. critical: tindak sekarang | major: tindak hari ini | minor: lihat kalau sempat | info: hanya jejak. */
+export type Level = 'info' | 'minor' | 'major' | 'critical';
 export type ServerStatus = 'ok' | 'peringatan' | 'tidak terjangkau' | 'belum';
 export type ExecVia = 'auto' | 'ssh' | 'agent';
 export interface Server {
@@ -25,10 +27,10 @@ export interface Overview {
 }
 
 // ---------- monitoring
-export interface Alert { id: number; title: string; detail: string; level: 'kritis' | 'peringatan'; ts: number; resolved: boolean; acked: boolean; server_name?: string }
-export type CheckStatus = 'ok' | 'warn' | 'crit' | 'unknown';
+export interface Alert { id: number; title: string; detail: string; level: Level; ts: number; resolved: boolean; acked: boolean; server_name?: string }
+export type CheckStatus = 'ok' | 'minor' | 'warn' | 'crit' | 'unknown';   // warn = Major, crit = Critical
 export interface Check {
-  id: number; name: string; type: string; pack?: string; std_source?: 'global' | 'bawaan' | 'sendiri'; params?: Record<string, unknown>; enabled: boolean; warn: number | null; crit: number | null;
+  id: number; name: string; type: string; pack?: string; std_source?: 'global' | 'bawaan' | 'sendiri'; params?: Record<string, unknown>; enabled: boolean; minor?: number | null; warn: number | null; crit: number | null;
   last_status: CheckStatus | null; last_detail: string | null; last_value: number | null; last_run: number | null;
 }
 export interface SeriesPoint { ts: number; value: number }
@@ -49,12 +51,13 @@ export interface AgentStatus {
   online: boolean; last_seen: number | null; version: string | null; hostname: string | null; exec_enabled: boolean; open_keys: string[] | null;
 }
 export type ExecPath = 'ssh' | 'agent' | 'none';
+export interface FleetAgent { server_id: number; name: string; state: 'hidup' | 'mati' | 'belum_terhubung' | 'belum_dipasang'; last_seen: number | null; version: string; exec_enabled: boolean; open_keys: number }
 export interface AgentOverview { agent: AgentStatus | null; path: ExecPath; binaries: string[] }
 export interface AgentGuide { keyId: string; rotated: boolean; script: string; configText: string; note: string }
 
 export type RecStatus = 'proposed' | 'approved' | 'executing' | 'done' | 'failed' | 'rejected' | 'superseded';
 export interface Incident {
-  id: number; title: string; detail: string; server_name: string; opened: number; resolved_at?: number | null; status: 'open' | 'resolved';
+  id: number; severity?: Level; title: string; detail: string; server_name: string; opened: number; resolved_at?: number | null; status: 'open' | 'resolved';
   event_count: number; rec_status: RecStatus | null; diag?: Array<{ name: string; out: string }>;
 }
 export type StepClass = 'read' | 'change' | 'blocked';
@@ -97,12 +100,12 @@ export interface UsageSummary {
   days: number; total: UsageBucket; byRole: Record<string, UsageBucket>; byModel: Record<string, UsageBucket>; byDay: Record<string, { input: number; output: number }>;
   recent: Array<{ ts: number; role: string; provider: string; model: string; input: number; output: number; cost: number | null }>;
 }
-export interface AppSettings { auto_report: boolean; reminder_min: number; notify_runs: boolean; digest_enabled: boolean; digest_hour: number }
+export interface AppSettings { auto_report: boolean; reminder_min: number; notify_runs: boolean; digest_enabled: boolean; digest_hour: number; quiet_on: boolean; quiet_start: number; quiet_end: number }
 export interface AuditEntry { id: number; ts: number; actor: string; action: string; detail: string }
 export interface RoleTest { text: string; usage: { input: number; output: number }; ms: number }
 
 export type ChannelType = 'telegram' | 'ntfy' | 'webhook' | 'email';
-export type NotifyLevel = 'kritis' | 'peringatan' | 'semua';
+export type NotifyLevel = Level;
 export interface Channel { id: number; type: ChannelType; name: string; min_level: NotifyLevel; enabled: boolean }
 export interface NotificationLog { id: number; ts: number; channel_name: string; kind: string; title: string; ok: boolean; error: string }
 export interface NewChannel { type: ChannelType; name: string; min_level: NotifyLevel; config: Record<string, string> }

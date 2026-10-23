@@ -1,6 +1,6 @@
 /* Komponen bersama. */
 .badge { display: inline-flex; align-items: center; gap: 5px; font-size: .74rem; padding: 0 7px; border-radius: 3px; border: 1px solid currentColor; white-space: nowrap; text-decoration: none; }
-.badge.ok { color: var(--ok); } .badge.warn { color: var(--warn); } .badge.bad { color: var(--bad); } .badge.mute { color: var(--muted); } .badge.acc { color: var(--accent); }
+.badge.ok { color: var(--ok); } .badge.warn { color: var(--warn); } .badge.bad { color: var(--bad); } .badge.mute { color: var(--muted); } .badge.acc { color: var(--accent); } .badge.info { color: var(--info); }
 
 .field { display: grid; gap: 4px; font-size: .85rem; }
 .field > span { color: var(--muted); }
@@ -111,7 +111,7 @@ details.group[open] { padding-bottom: 10px; }
 .meter { margin: 8px 0; }
 .meter-track { position: relative; height: 14px; border-radius: 7px; overflow: hidden; background: var(--panel-2); border: 1px solid var(--line); }
 .meter-track .z { position: absolute; top: 0; bottom: 0; opacity: .28; }
-.meter-track .z.ok { background: var(--ok); } .meter-track .z.warn { background: var(--warn); } .meter-track .z.bad { background: var(--bad); }
+.meter-track .z.ok { background: var(--ok); } .meter-track .z.minor { background: var(--accent); } .meter-track .z.warn { background: var(--warn); } .meter-track .z.bad { background: var(--bad); }
 .meter-track .range { position: absolute; top: 5px; height: 4px; background: var(--ink); opacity: .55; border-radius: 2px; }
 .meter-track .p95 { position: absolute; top: 3px; bottom: 3px; width: 2px; background: var(--ink); }
 .meter-track .now { position: absolute; top: 1px; bottom: 1px; width: 4px; margin-left: -2px; background: var(--accent); border-radius: 2px; }
@@ -140,6 +140,7 @@ fieldset.filters legend { float: left; width: 100%; font-weight: 600; font-size:
 .verdict.nodata > svg { color: var(--muted); }
 details.fold > summary .lbl { margin-left: 4px; }
 p.calm { padding: 10px 2px; }
+ul.events { list-style: none; padding: 0; margin: 8px 0 0; }
 
 /* layar sempit: sentuhan nyaman, tabel menjadi kartu, penomoran halaman diringkas */
 @media (max-width: 800px) {

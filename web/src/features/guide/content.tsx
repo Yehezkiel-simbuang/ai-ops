@@ -171,6 +171,7 @@ export const SECTIONS: GuideSection[] = [
           <li>Tambahkan kanal notifikasi (Telegram, ntfy, webhook, email) bila ingin diberi tahu saat ada peringatan.</li>
         </ol>
         <p>Pemakaian token tercatat di menu <b>Pemakaian token</b>.</p>
+        <p><b>Empat tingkat keparahan</b> menentukan apa yang sampai ke Anda: <b>Critical</b> (tindak sekarang) dan <b>Major</b> (tindak hari ini) dikirim langsung; <b>Minor</b> (lihat kalau sempat) masuk ringkasan harian; <b>Info</b> hanya tercatat sebagai jejak. Tiap kanal punya tingkat minimum sendiri, dan Major bisa ditunda saat jam tenang (Critical tidak pernah ditunda). Batas tiap tingkat diatur di halaman <b>Standar</b>.</p>
       </>
     )
   },
@@ -178,7 +179,7 @@ export const SECTIONS: GuideSection[] = [
     id: 'agen', title: 'Pasang agen di server (opsional)',
     body: (
       <>
-        <p>Agen adalah program kecil di server yang mengirim kondisi dan kejadian kritis ke aplikasi, sehingga insiden terdeteksi seketika dan rekomendasi dibuat otomatis. Tanpa agen, aplikasi tetap memantau lewat SSH secara berkala.</p>
+        <p>Agen adalah program kecil di server yang menilai kondisi di server sendiri dan hanya melapor saat ada yang perlu Anda ketahui (menurut tingkat Critical, Major, Minor, atau Info), lengkap dengan buktinya. Beban pemantauan tidak menumpuk di aplikasi. Batas yang dipakai agen diambil dari halaman <b>Standar</b>, dan yang mati atau belum terhubung terlihat di panel <b>Armada agen</b> di halaman Server. Tanpa agen, aplikasi tetap memantau lewat SSH secara berkala.</p>
         <Hint icon={IconAlert}><span><b>Syarat penting:</b> agen berjalan di server Anda lalu menghubungi aplikasi lewat <b>HTTPS</b>. Agen menolak alamat <code>http://</code>, dan alamat <code>localhost</code> tidak terjangkau dari server lain. Jadi aplikasi harus punya alamat HTTPS yang bisa dibuka dari server tersebut.</span></Hint>
         <p>Dua jalur komunikasi berbeda arah. SSH dimulai oleh AI Ops, laporan agen dimulai oleh agen:</p>
         <AgentFlow />

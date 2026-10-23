@@ -7,15 +7,15 @@ import { StandardsPage, limitProblem, type Row, type Standards } from './Standar
 afterEach(() => vi.unstubAllGlobals());
 
 const stat = { count: 120, min: 10, max: 60, avg: 30, p95: 50, servers: 3 };
-const row = (over: Partial<Row>): Row => ({ key: 'x', unit: '%', dir: 'gt', numeric: true, warn: 70, crit: 90, confirm: 2, default: { warn: 70, crit: 90, confirm: 2 }, custom: false, stats: null, servers: 0, ...over });
+const row = (over: Partial<Row>): Row => ({ key: 'x', unit: '%', dir: 'gt', numeric: true, minor: null, warn: 70, crit: 90, confirm: 2, default: { minor: null, warn: 70, crit: 90, confirm: 2 }, custom: false, stats: null, servers: 0, ...over });
 const data = (): Standards => ({
   base: [
-    row({ key: 'base:disk', label: 'Disk root terpakai', description: 'Persen ruang disk.', min: 0, max: 100, warn: 85, crit: 95, confirm: null, default: { warn: 85, crit: 95, confirm: null }, stats: stat, servers: 3 }),
-    row({ key: 'base:mem', label: 'Memori tersedia', description: 'Persen memori.', dir: 'lt', min: 0, max: 100, warn: 10, crit: 5, confirm: null, default: { warn: 10, crit: 5, confirm: null }, custom: true })
+    row({ key: 'base:disk', label: 'Disk root terpakai', description: 'Persen ruang disk.', min: 0, max: 100, warn: 85, crit: 95, confirm: null, default: { minor: null, warn: 85, crit: 95, confirm: null }, stats: stat, servers: 3 }),
+    row({ key: 'base:mem', label: 'Memori tersedia', description: 'Persen memori.', dir: 'lt', min: 0, max: 100, warn: 10, crit: 5, confirm: null, default: { minor: null, warn: 10, crit: 5, confirm: null }, custom: true })
   ],
   packs: [{ id: 'mysql', label: 'MySQL / MariaDB', checks: [
     row({ key: 'pack:mysql:MySQL: koneksi terpakai %', name: 'MySQL: koneksi terpakai %', typeLabel: 'Koneksi MySQL terpakai', stats: stat, servers: 2 }),
-    row({ key: 'pack:mysql:MySQL: layanan aktif', name: 'MySQL: layanan aktif', typeLabel: 'Layanan systemd aktif', numeric: false, warn: null, crit: null, confirm: 1, default: { warn: null, crit: null, confirm: 1 } })
+    row({ key: 'pack:mysql:MySQL: layanan aktif', name: 'MySQL: layanan aktif', typeLabel: 'Layanan systemd aktif', numeric: false, warn: null, crit: null, confirm: 1, default: { minor: null, warn: null, crit: null, confirm: 1 } })
   ] }]
 });
 const api = (extra: Record<string, unknown> = {}) => mockApi({ 'GET /api/standards': { body: data() }, ...extra } as never);
@@ -48,11 +48,11 @@ describe('StandardsPage', () => {
     renderWithProviders(<StandardsPage />);
     const disk = await screen.findByRole('region', { name: 'Disk root terpakai' }), save = within(disk).getByRole('button', { name: 'Simpan' });
     expect(save).toBeDisabled();
-    const warn = within(disk).getByLabelText('Ambang peringatan'), crit = within(disk).getByLabelText('Ambang kritis');
+    const warn = within(disk).getByLabelText('Batas Major'), crit = within(disk).getByLabelText('Batas Critical');
     await userEvent.clear(warn); await userEvent.type(warn, '97'); expect(within(disk).getByRole('alert')).toHaveTextContent(/lebih tinggi/); expect(save).toBeDisabled();
     await userEvent.clear(warn); await userEvent.type(warn, '60'); await userEvent.clear(crit); await userEvent.type(crit, '80'); expect(save).toBeEnabled(); await userEvent.click(save);
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT' && c.path === '/api/standards')).toBe(true));
-    expect(calls.find((c) => c.method === 'PUT')!.body).toEqual({ key: 'base:disk', warn: 60, crit: 80, confirm: null });
+    expect(calls.find((c) => c.method === 'PUT')!.body).toEqual({ key: 'base:disk', minor: null, warn: 60, crit: 80, confirm: null });
     await userEvent.click(within(card('Memori tersedia')).getByRole('button', { name: /Pulihkan bawaan/ }));
     await waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(2)); expect(calls.filter((c) => c.method === 'PUT')[1]!.body).toEqual({ key: 'base:mem', reset: true });
   });
@@ -63,7 +63,7 @@ describe('StandardsPage', () => {
     await userEvent.click(await screen.findByText('MySQL / MariaDB'));
     const c = card('MySQL: koneksi terpakai %'); expect(within(card('Disk root terpakai')).queryByLabelText('Konfirmasi')).not.toBeInTheDocument();
     const conf = within(c).getByLabelText('Konfirmasi'); await userEvent.clear(conf); await userEvent.type(conf, '3'); await userEvent.click(within(c).getByRole('button', { name: 'Simpan' }));
-    await waitFor(() => expect(calls.some((x) => x.method === 'PUT')).toBe(true)); expect(calls.find((x) => x.method === 'PUT')!.body).toEqual({ key: 'pack:mysql:MySQL: koneksi terpakai %', warn: 70, crit: 90, confirm: 3 });
+    await waitFor(() => expect(calls.some((x) => x.method === 'PUT')).toBe(true)); expect(calls.find((x) => x.method === 'PUT')!.body).toEqual({ key: 'pack:mysql:MySQL: koneksi terpakai %', minor: null, warn: 70, crit: 90, confirm: 3 });
   });
 
   it('Buat dengan AI: usulan ditampilkan untuk ditinjau (yang bermasalah terkunci), dan hanya yang dicentang yang disimpan', async () => {
@@ -81,5 +81,27 @@ describe('StandardsPage', () => {
     expect(calls.some((c) => c.method === 'PUT')).toBe(false);   // belum ada yang tersimpan
     await userEvent.click(screen.getByRole('button', { name: /Terapkan 1 yang dipilih/ }));
     await waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1)); expect(calls.find((c) => c.method === 'PUT')!.body).toEqual({ key: 'base:disk', warn: 75, crit: 90 });
+  });
+});
+
+describe('tiga batas: Minor, Major, Critical', () => {
+  it('limitProblem: Minor opsional, dan urutannya harus makin parah menurut arah', () => {
+    expect(limitProblem('gt', '85', '95', { minor: '75' })).toBeNull(); expect(limitProblem('gt', '85', '95', { minor: '' })).toBeNull();
+    expect(limitProblem('gt', '85', '95', { minor: '90' })).toMatch(/Major harus sama atau lebih tinggi dari Minor/); expect(limitProblem('gt', '85', '80', { minor: '70' })).toMatch(/Critical harus sama atau lebih tinggi dari Major/);
+    expect(limitProblem('lt', '10', '5', { minor: '20' })).toBeNull(); expect(limitProblem('lt', '10', '5', { minor: '8' })).toMatch(/Major harus sama atau lebih rendah dari Minor/);
+  });
+  it('zones: Minor menambah satu zona di antara aman dan Major, untuk arah naik dan turun; tanpa Minor sama seperti dulu', () => {
+    expect(zones('gt', 85, 95, 100, 75).map((z) => z[2])).toEqual(['ok', 'minor', 'warn', 'bad']); expect(zones('gt', 85, 95, 100).map((z) => z[2])).toEqual(['ok', 'warn', 'bad']);
+    expect(zones('lt', 10, 5, 100, 20).map((z) => z[2])).toEqual(['bad', 'warn', 'minor', 'ok']); expect(zones('lt', 10, 5, 100).map((z) => z[2])).toEqual(['bad', 'warn', 'ok']);
+    expect(zones('gt', 85, 95, 100, 75)[1]).toEqual([75, 85, 'minor']);
+  });
+  it('kartu: tiga kolom isian; Minor dikirim ke server; Minor di atas Major ditolak dengan pesan', async () => {
+    const d: Standards = { base: [row({ key: 'base:disk', label: 'Disk root terpakai', description: 'x', min: 0, max: 100, minor: 75, warn: 85, crit: 95, confirm: null, default: { minor: 75, warn: 85, crit: 95, confirm: null } })], packs: [] };
+    const calls = mockApi({ 'GET /api/standards': { body: d }, 'PUT /api/standards': { body: d } });
+    renderWithProviders(<StandardsPage />);
+    const minor = await screen.findByLabelText('Batas Minor'); expect(screen.getByLabelText('Batas Major')).toHaveValue(85); expect(screen.getByLabelText('Batas Critical')).toHaveValue(95); expect(minor).toHaveValue(75);
+    await userEvent.clear(minor); await userEvent.type(minor, '90'); expect(await screen.findByText(/Major harus sama atau lebih tinggi dari Minor/)).toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Simpan' })).toBeDisabled();
+    await userEvent.clear(minor); await userEvent.type(minor, '70'); await userEvent.click(screen.getByRole('button', { name: 'Simpan' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true)); expect(calls.find((c) => c.method === 'PUT')!.body).toEqual({ key: 'base:disk', minor: 70, warn: 85, crit: 95, confirm: null });
   });
 });

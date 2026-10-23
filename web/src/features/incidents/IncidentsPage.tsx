@@ -11,7 +11,7 @@ export function IncidentRow({ i }: { i: Incident }) {
   return (
     <Item to={`/insiden/${i.id}`} title={i.title} sub={[`${i.server_name} | ${i.detail} | ${ago(i.opened)}${i.event_count > 1 ? ` | ${i.event_count} kejadian` : ''}`]}>
       <RecStatusBadge status={i.rec_status} />
-      <IncidentBadge status={i.status} />
+      <IncidentBadge status={i.status} severity={i.severity} />
     </Item>
   );
 }
@@ -21,9 +21,9 @@ export function IncidentsPage() {
   return (
     <>
       <PageHead title="Insiden" icon={IconFlame} />
-      <Note>Hanya kondisi kritis yang dikirim agen. Tiap insiden mendapat rekomendasi; tidak ada yang dijalankan sebelum Anda menyetujuinya.</Note>
+      <Note>Agen mengirim kejadian menurut tingkatnya (Critical, Major, Minor, Info). Insiden Major dan Critical mendapat rekomendasi; tidak ada yang dijalankan sebelum Anda menyetujuinya.</Note>
       <h2 style={{ marginTop: 16 }}><IconAlert size={16} aria-hidden />Terbuka</h2>
-      <Async query={open}>{(rows) => rows.length ? <List>{rows.map((i) => <IncidentRow key={i.id} i={i} />)}</List> : <Empty>Tidak ada insiden kritis. Semua tenang.</Empty>}</Async>
+      <Async query={open}>{(rows) => rows.length ? <List>{rows.map((i) => <IncidentRow key={i.id} i={i} />)}</List> : <Empty>Tidak ada insiden. Semua tenang.</Empty>}</Async>
       <Section title="Sudah pulih (terbaru)" icon={IconHistory}>
         <Async query={resolved}>{(rows) => rows.length ? <List>{rows.slice(0, 15).map((i) => <IncidentRow key={i.id} i={i} />)}</List> : <Empty>Belum ada.</Empty>}</Async>
       </Section>

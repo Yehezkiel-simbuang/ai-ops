@@ -32,7 +32,7 @@ function ChannelRow({ c }: { c: Channel }) {
 }
 
 function NewChannelForm({ onDone }: { onDone: () => void }) {
-  const [type, setType] = useState<ChannelType>('telegram'), [name, setName] = useState(''), [level, setLevel] = useState<NotifyLevel>('kritis');
+  const [type, setType] = useState<ChannelType>('telegram'), [name, setName] = useState(''), [level, setLevel] = useState<NotifyLevel>('major');
   const [config, setConfig] = useState(() => defaultConfig('telegram'));
   const info = CHANNEL_TYPES[type];
   const add = useAction(
@@ -49,21 +49,32 @@ function NewChannelForm({ onDone }: { onDone: () => void }) {
         <Field key={`${type}-${f.key}`} label={f.label}><input type={f.secret ? 'password' : 'text'} className={f.secret ? undefined : 'mono'} autoComplete="off" value={config[f.key] ?? ''} onChange={(e) => setConfig((c) => ({ ...c, [f.key]: e.target.value }))} /></Field>
       ))}</div>
       <p className="lbl">{info.hint}</p>
-      <Field label="Kirim untuk"><select value={level} onChange={(e) => setLevel(e.target.value as NotifyLevel)}>{LEVELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+      <Field label="Kirim mulai tingkat"><select value={level} onChange={(e) => setLevel(e.target.value as NotifyLevel)}>{LEVELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
       <div className="row"><Button primary icon={IconPlus} onClick={() => add.mutateAsync()}>Tambah kanal</Button><Button icon={IconClose} onClick={onDone}>Batal</Button></div>
     </div>
   );
 }
 
 function Preferences({ settings }: { settings: AppSettings }) {
-  const [reminder, setReminder] = useState(String(settings.reminder_min));
+  const [reminder, setReminder] = useState(String(settings.reminder_min)), [quietStart, setQuietStart] = useState(String(settings.quiet_start)), [quietEnd, setQuietEnd] = useState(String(settings.quiet_end));
   const save = useAction((patch: Partial<AppSettings>) => post('/api/settings', patch), { success: 'Disimpan', invalidate: [['settings']] });
   return (
     <>
       <div className="row" style={{ marginTop: 12 }}>
         <span className="lbl">Ingatkan lagi tiap</span>
         <input type="number" min={0} max={1440} className="input-md" aria-label="Interval pengingat menit" value={reminder} onChange={(e) => setReminder(e.target.value)} onBlur={() => save.mutate({ reminder_min: Number(reminder) })} />
-        <span className="lbl">menit selama kritis belum ditandai dilihat (0 = mati)</span>
+        <span className="lbl">menit selama Critical belum ditandai dilihat (0 = mati)</span>
+      </div>
+      <div className="row" style={{ marginTop: 8 }}>
+        <label className="checkline"><input type="checkbox" aria-label="Jam tenang untuk Major" checked={settings.quiet_on} onChange={(e) => save.mutate({ quiet_on: e.target.checked })} /><span>Jam tenang untuk Major: tunda, lalu kirim satu ringkasan setelahnya. Critical tidak pernah ditunda.</span></label>
+        {settings.quiet_on && (
+          <>
+            <span className="lbl">dari jam</span>
+            <input type="number" min={0} max={23} className="input-sm" aria-label="Jam tenang mulai" value={quietStart} onChange={(e) => setQuietStart(e.target.value)} onBlur={() => save.mutate({ quiet_start: Number(quietStart) })} />
+            <span className="lbl">sampai jam</span>
+            <input type="number" min={0} max={23} className="input-sm" aria-label="Jam tenang selesai" value={quietEnd} onChange={(e) => setQuietEnd(e.target.value)} onBlur={() => save.mutate({ quiet_end: Number(quietEnd) })} />
+          </>
+        )}
       </div>
       <label className="checkline" style={{ marginTop: 8 }}>
         <input type="checkbox" checked={settings.notify_runs} onChange={(e) => save.mutate({ notify_runs: e.target.checked })} /><span>Kabari juga saat proses setup selesai atau gagal</span>
@@ -76,7 +87,7 @@ export function ChannelsPanel() {
   const channels = useQuery(q.channels()), history = useQuery(q.notifications()), settings = useQuery(q.settings()), [adding, setAdding] = useState(false);
   return (
     <Section title="Notifikasi ke Anda" icon={IconBell}>
-      <Note>Dikirim saat peringatan kritis muncul, saat pulih, sebagai pengingat bila belum dilihat, dan saat agen meminta persetujuan perintah. Setiap kanal punya level minimum sendiri.</Note>
+      <Note>Critical dan Major dikirim langsung; Minor masuk ringkasan harian; Info hanya tercatat. Juga dikirim saat pulih, sebagai pengingat bila belum dilihat, dan saat agen meminta persetujuan perintah. Setiap kanal punya tingkat minimum sendiri.</Note>
       <div className="row" style={{ marginTop: 12 }}><Button primary icon={IconPlus} onClick={() => setAdding(true)}>Tambah kanal</Button></div>
       <div style={{ marginTop: 12 }}>
         <div>

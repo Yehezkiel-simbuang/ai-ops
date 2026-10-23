@@ -6,10 +6,10 @@ import * as Safety from './safety.js';
 export type Params = Record<string, any>;
 export interface TypeDef { label: string; kind: 'match' | 'number' | 'http' | 'fpm' | 'netdata'; ok?: RegExp; build: (p: Params) => string }
 export interface PackDef { label: string; hint: string; /** 'aplikasi' = khusus satu aplikasi atau proyek, bukan layanan umum. Bawaan: 'umum'. */ category?: 'umum' | 'aplikasi'; fields: Array<{ k: string; label: string; def: string }>; make: (o: Params, sudo: boolean) => CheckDef[] }
-export interface CheckDef { name: string; type: string; params: Params; warn?: number; crit?: number; dir?: 'gt' | 'lt'; delta?: boolean | number; confirm?: number; pack?: string }
-export interface CheckRow { id?: number; type: string; params: Params | string; warn?: number | null; crit?: number | null; dir?: string; delta?: boolean | number; last_raw?: number | null }
+export interface CheckDef { name: string; type: string; params: Params; minor?: number; warn?: number; crit?: number; dir?: 'gt' | 'lt'; delta?: boolean | number; confirm?: number; pack?: string }
+export interface CheckRow { id?: number; type: string; params: Params | string; minor?: number | null; warn?: number | null; crit?: number | null; dir?: string; delta?: boolean | number; last_raw?: number | null }
 export interface CmdResult { exitCode: number; stdout: string; stderr: string; timedOut?: boolean }
-export interface Evaluation { status: 'ok' | 'warn' | 'crit' | 'unknown'; value: number | null; raw: number | null; detail: string }
+export interface Evaluation { status: 'ok' | 'minor' | 'warn' | 'crit' | 'unknown'; value: number | null; raw: number | null; detail: string }
 
 export const V = {
   unit: /^[A-Za-z0-9@._-]{1,80}$/, port: /^\d{1,5}$/, url: /^https?:\/\/[A-Za-z0-9._~:\/?#@!&=%+,-]{1,300}$/, path: /^\/[A-Za-z0-9._\/@+-]{0,200}$/, db: /^[A-Za-z0-9_]{1,64}$/,
@@ -134,9 +134,9 @@ const firstLine = function (s: unknown): string { return String(s || '').trim().
 // hasil perintah -> { status: ok|warn|crit|unknown, value, raw, detail }
 export function evaluate(check: CheckRow, res: CmdResult): Evaluation {
   const t = TYPES[check.type], out = String(res.stdout || '').trim(), err = firstLine(res.stderr);
-  const cmp = function (v: number): 'ok' | 'warn' | 'crit' {
+  const cmp = function (v: number): 'ok' | 'minor' | 'warn' | 'crit' {
     const dir = check.dir || 'gt', hit = function (th: number | null | undefined) { return th != null && (dir === 'lt' ? v <= th : v >= th); };
-    return hit(check.crit) ? 'crit' : hit(check.warn) ? 'warn' : 'ok';
+    return hit(check.crit) ? 'crit' : hit(check.warn) ? 'warn' : hit(check.minor) ? 'minor' : 'ok';   // warn = batas MAJOR, crit = CRITICAL
   };
   if (res.timedOut) return { status: 'unknown', value: null, raw: null, detail: 'perintah melewati batas waktu' };
   if (t.kind === 'match') { const okk = t.ok!.test(out); return { status: okk ? 'ok' : 'crit', value: okk ? 1 : 0, raw: null, detail: okk ? '' : (firstLine(out) || err || 'tidak sesuai harapan').slice(0, 200) }; }
@@ -161,7 +161,7 @@ export function evaluate(check: CheckRow, res: CmdResult): Evaluation {
   let v = num(out);
   if (v == null) return { status: 'unknown', value: null, raw: null, detail: (err || firstLine(out) || 'tidak ada angka pada keluaran').slice(0, 200) };
   const raw = v; if (check.delta) { v = check.last_raw == null ? 0 : (raw >= check.last_raw ? raw - check.last_raw : raw); }
-  const s = cmp(v); return { status: s, value: v, raw: raw, detail: s === 'ok' ? '' : 'nilai ' + v + (check.dir === 'lt' ? ' (batas bawah ' : ' (batas ') + (s === 'crit' ? check.crit : check.warn) + ')' };
+  const s = cmp(v); return { status: s, value: v, raw: raw, detail: s === 'ok' ? '' : 'nilai ' + v + (check.dir === 'lt' ? ' (batas bawah ' : ' (batas ') + (s === 'crit' ? check.crit : s === 'warn' ? check.warn : check.minor) + ')' };
 }
 
 // satu skrip untuk semua pemeriksaan satu server: satu koneksi SSH, tiap perintah dibatasi waktu 15 detik
@@ -198,10 +198,13 @@ export function suggest(out: string): Record<string, Params> {
   return found;
 }
 
-/** Urutan ambang yang tidak masuk akal (kritis lebih ringan dari peringatan); null bila benar. */
-export function orderProblem(dir: string, warn: number | null, crit: number | null): string | null {
-  if (warn == null || crit == null) return null;
-  if (dir === 'lt' ? crit > warn : crit < warn) return dir === 'lt' ? 'Ambang kritis harus sama atau lebih rendah dari ambang peringatan (bahaya bila nilai turun)' : 'Ambang kritis harus sama atau lebih tinggi dari ambang peringatan';
+/** Urutan ambang yang tidak masuk akal; null bila benar. Batas harus makin parah: minor, lalu warn (= major), lalu crit (= critical). */
+export function orderProblem(dir: string, warn: number | null, crit: number | null, minor: number | null = null): string | null {
+  const steps: Array<[string, number | null]> = [['minor', minor], ['major', warn], ['critical', crit]], set = steps.filter((x) => x[1] != null) as Array<[string, number]>;
+  for (let i = 1; i < set.length; i++) {
+    const [pn, pv] = set[i - 1]!, [cn, cv] = set[i]!;
+    if (dir === 'lt' ? cv > pv : cv < pv) return dir === 'lt' ? `Batas ${cn} harus sama atau lebih rendah dari batas ${pn} (bahaya bila nilai turun)` : `Batas ${cn} harus sama atau lebih tinggi dari batas ${pn}`;
+  }
   return null;
 }
 

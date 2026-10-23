@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { q } from '@/api/queries';
 import type { Overview } from '@/api/types';
-import { RecStatusBadge, RunStatusBadge, ServerStatusBadge, LevelBadge } from '@/components/StatusBadges';
+import { IncidentBadge, RecStatusBadge, RunStatusBadge, ServerStatusBadge, LevelBadge } from '@/components/StatusBadges';
 import { VerdictBanner } from '@/components/VerdictBanner';
 import { Async } from '@/components/ui/Async';
 import { Badge } from '@/components/ui/Badge';
@@ -56,9 +56,9 @@ function OverviewBody({ o }: { o: Overview }) {
         )}
         {o.incidents.length > 0 && (
           <>
-            <h3><IconFlame size={14} aria-hidden /> Insiden kritis dari agen ({o.incidents.length})</h3>
+            <h3><IconFlame size={14} aria-hidden /> Insiden dari agen ({o.incidents.length})</h3>
             <List>{o.incidents.map((i) => (
-              <Item key={i.id} to={`/insiden/${i.id}`} title={i.title} sub={[`${i.server_name} | ${i.detail} | ${ago(i.opened)}`]}><RecStatusBadge status={i.rec_status} /></Item>
+              <Item key={i.id} to={`/insiden/${i.id}`} title={i.title} sub={[`${i.server_name} | ${i.detail} | ${ago(i.opened)}`]}><IncidentBadge status="open" severity={i.severity} /><RecStatusBadge status={i.rec_status} /></Item>
             ))}</List>
           </>
         )}

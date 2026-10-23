@@ -12,7 +12,7 @@ const BLOCKED: Array<[RegExp, string]> = [
   [/\bmkfs(\.\w+)?\b/, 'format filesystem'], [/\bdd\b[^|;]*\bof=\/dev\//, 'dd menulis ke perangkat'], [/>\s*\/dev\/(sd|nvme|vd|xvd|mmcblk)/, 'menimpa perangkat blok'],
   [/(^|[\s;&|])(shutdown|reboot|halt|poweroff|init\s+[06])\b/, 'mematikan atau me-restart mesin'], [/\bsystemctl\s+(reboot|poweroff|halt|kexec)\b/, 'mematikan atau me-restart mesin'],
   [/:\(\)\s*\{\s*:\|:&\s*\};:/, 'fork bomb'], [/\b(curl|wget)\b[^|;]*\|\s*(sudo\s+)?(ba|z|da)?sh\b/, 'mengunduh lalu langsung menjalankan skrip'],
-  [/\b(passwd|chpasswd|userdel|deluser|usermod\s+-[a-zA-Z]*L)\b/, 'mengubah akun pengguna'], [/\bchmod\s+(-R\s+)?[0-7]*777\s+\/(\s|$)/, 'chmod 777 pada /'],
+  [/(?<!getent\s+)(?<!\/etc\/)\bpasswd\b|\b(chpasswd|userdel|deluser|usermod\s+-[a-zA-Z]*L)\b/, 'mengubah akun pengguna'], [/\bchmod\s+(-R\s+)?[0-7]*777\s+\/(\s|$)/, 'chmod 777 pada /'],
   [/\bzpool\s+(destroy|labelclear|export)\b/, 'merusak pool ZFS'], [/\bzfs\s+destroy\b/, 'menghapus dataset ZFS'], [/\bpvesm\s+remove\b|\bqm\s+destroy\b|\bpct\s+destroy\b/, 'menghapus VM/LXC'],
   [/\bDROP\s+(DATABASE|SCHEMA)\b/i, 'DROP DATABASE'], [/\b(iptables|nft|ufw)\b[^;|&]*(-F|flush|disable)\b/, 'menghapus aturan firewall'], [/\bcrontab\s+-r\b/, 'menghapus seluruh crontab'],
   [/\bauthorized_keys\b[^;|&]*>/, 'menimpa authorized_keys'], [/>\s*\/etc\/(passwd|shadow|sudoers)/, 'menimpa berkas akun']

@@ -5,12 +5,13 @@ import os from 'node:os';
 import tls from 'node:tls';
 import { audit, bad, db, log, metaGet } from './context.js';
 import { open, seal } from './crypto.js';
+import { isLevel, rank, RANK, type Level } from './levels.js';
 
-export const LEVELS: Record<string, number> = { semua: 1, peringatan: 2, kritis: 3 };
 type Cfg = Record<string, string>;
 const FIELDS: Record<string, string[]> = { telegram: ['token', 'chatId', 'apiBase'], ntfy: ['url', 'topic', 'token'], webhook: ['url', 'format'], email: ['host', 'port', 'secure', 'user', 'pass', 'from', 'to'] };
 const SECRET: Record<string, string[]> = { telegram: ['token'], ntfy: ['token'], webhook: ['url'], email: ['pass'] };
-export interface Message { kind: string; level: 'kritis' | 'peringatan' | 'pulih' | 'info'; importance: number; title: string; text: string }
+/** importance 1-4 = RANK tingkat; 4 juga dipakai untuk hal yang harus sampai ke semua kanal (persetujuan, perbaikan gagal). */
+export interface Message { kind: string; level: Level | 'resolved'; importance: number; title: string; text: string }
 
 function clean(type: string, c: Record<string, unknown>): Cfg {
   if (!FIELDS[type]) throw bad('Jenis kanal tidak dikenal');
@@ -35,7 +36,7 @@ export async function save(b: { type?: string; name?: string; config?: Record<st
   const old = id ? await db().one('SELECT * FROM channels WHERE id=$1', [Number(id)]) : undefined; if (id && !old) throw bad('Kanal tidak ada');
   const type = old ? old.type : String(b.type || ''), prev = old ? cfgOf(old) : {}, incoming: Record<string, unknown> = { ...(b.config ?? {}) };
   for (const k of SECRET[type] ?? []) if (!incoming[k] && prev[k]) incoming[k] = prev[k];   // kosong = pertahankan rahasia lama
-  const cfg = clean(type, incoming), name = String(b.name || '').trim() || type, ml = b.min_level && LEVELS[b.min_level] ? b.min_level : old ? old.min_level : 'kritis';
+  const cfg = clean(type, incoming), name = String(b.name || '').trim() || type, ml = isLevel(b.min_level) ? b.min_level : old ? old.min_level : 'major';
   if (old) await db().exec('UPDATE channels SET name=$1, config_enc=$2, enabled=$3, min_level=$4 WHERE id=$5', [name, seal(JSON.stringify(cfg)), b.enabled !== false, ml, old.id]);
   else await db().exec('INSERT INTO channels(type,name,config_enc,enabled,min_level,created) VALUES($1,$2,$3,$4,$5,$6)', [type, name, seal(JSON.stringify(cfg)), true, ml, Date.now()]);
   await audit('pengguna', old ? 'kanal.ubah' : 'kanal.tambah', `${type} ${name}`); return list();
@@ -48,9 +49,9 @@ async function post(url: string, init: RequestInit, ms = 15_000): Promise<void> 
   try { const r = await fetch(url, { ...init, signal: ctl.signal }); if (!r.ok) { const b = await r.text().catch(() => ''); throw new Error(`HTTP ${r.status} ${b.slice(0, 150)}`); } }
   catch (e) { throw new Error((e as Error).name === 'AbortError' ? 'waktu habis' : (e as Error).message); } finally { clearTimeout(t); }
 }
-const ICON = { kritis: '[KRITIS]', peringatan: '[PERINGATAN]', pulih: '[PULIH]', info: '[INFO]' };
+const ICON = { critical: '[CRITICAL]', major: '[MAJOR]', minor: '[MINOR]', info: '[INFO]', resolved: '[RESOLVED]' };
 const sendTelegram = (c: Cfg, m: Message) => post(`${c.apiBase || 'https://api.telegram.org'}/bot${c.token}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: c.chatId, text: `${m.title}\n${m.text}`, disable_web_page_preview: true }) });
-const sendNtfy = (c: Cfg, m: Message) => post(`${c.url}/${c.topic}`, { method: 'POST', headers: { Title: encodeURIComponent(m.title).replace(/%20/g, ' ').slice(0, 250), Priority: m.level === 'kritis' ? '5' : m.level === 'peringatan' ? '4' : '3', Tags: m.level === 'pulih' ? 'white_check_mark' : m.level === 'kritis' ? 'rotating_light' : 'warning', ...(c.token ? { Authorization: `Bearer ${c.token}` } : {}) }, body: m.text });
+const sendNtfy = (c: Cfg, m: Message) => post(`${c.url}/${c.topic}`, { method: 'POST', headers: { Title: encodeURIComponent(m.title).replace(/%20/g, ' ').slice(0, 250), Priority: m.level === 'critical' ? '5' : m.level === 'major' ? '4' : m.level === 'minor' ? '3' : '2', Tags: m.level === 'resolved' ? 'white_check_mark' : m.level === 'critical' ? 'rotating_light' : m.level === 'info' ? 'information_source' : 'warning', ...(c.token ? { Authorization: `Bearer ${c.token}` } : {}) }, body: m.text });
 function sendWebhook(c: Cfg, m: Message): Promise<void> {
   const text = `${m.title}\n${m.text}`, body = c.format === 'slack' ? { text } : c.format === 'discord' ? { content: text.slice(0, 1900) } : { title: m.title, text: m.text, level: m.level, kind: m.kind, ts: new Date().toISOString() };
   return post(c.url!, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -106,7 +107,7 @@ export async function test(id: number | string) {
 }
 export async function dispatch(m: Message) {
   const rows = await db().query('SELECT * FROM channels WHERE enabled'), out: Array<{ ok: boolean; error?: string }> = [];
-  for (const row of rows) { if ((LEVELS[row.min_level] ?? 3) > m.importance) continue; out.push(await sendTo(row, m)); }
+  for (const row of rows) { if ((rank(row.min_level) || RANK.major) > m.importance) continue; out.push(await sendTo(row, m)); }   // kanal menerima SEGERA mulai min_level-nya
   return out;
 }
 const fire = (p: Promise<unknown>): void => { p.catch((e) => log().warn({ err: (e as Error).message }, 'notifikasi gagal')); };
@@ -114,29 +115,51 @@ const fire = (p: Promise<unknown>): void => { p.catch((e) => log().warn({ err: (
 // ---------- peristiwa
 interface AlertLike { id?: number; level: string; title: string; detail: string; source?: string; notified_ts?: number | null }
 function alertMessage(a: AlertLike, serverName: string, phase: 'baru' | 'pulih' | 'ulang'): Message {
-  if (phase === 'pulih') return { kind: 'alert', level: 'pulih', importance: a.level === 'kritis' ? 3 : 2, title: `${ICON.pulih} ${serverName}: ${a.title}`, text: 'Kembali normal. ' + (a.detail || '') };
-  const lv = a.level === 'kritis' ? 'kritis' : 'peringatan';
-  return { kind: 'alert', level: lv, importance: a.level === 'kritis' ? 3 : 2, title: `${ICON[lv]} ${serverName}: ${a.title}${phase === 'ulang' ? ' (pengingat)' : ''}`, text: `${a.detail || ''}\nSumber: ${a.source === 'service' ? 'pemeriksaan layanan' : a.source === 'agent' ? 'agen di server' : 'resource'}. Buka AI Ops untuk detail.` };
+  const lv: Level = isLevel(a.level) ? a.level : 'major';
+  if (phase === 'pulih') return { kind: 'alert', level: 'resolved', importance: RANK[lv], title: `${ICON.resolved} ${serverName}: ${a.title}`, text: 'Kembali normal. ' + (a.detail || '') };
+  return { kind: 'alert', level: lv, importance: RANK[lv], title: `${ICON[lv]} ${serverName}: ${a.title}${phase === 'ulang' ? ' (pengingat)' : ''}`, text: `${a.detail || ''}\nSumber: ${a.source === 'service' ? 'pemeriksaan layanan' : a.source === 'agent' ? 'agen di server' : 'resource'}. Buka AI Ops untuk detail.` };
 }
-export function alertOpened(a: AlertLike, serverName: string): void { fire((async () => { if (a.id) await db().exec('UPDATE alerts SET notified_ts=$1 WHERE id=$2', [Date.now(), a.id]); await dispatch(alertMessage(a, serverName, 'baru')); })()); }
+
+/** Jam tenang untuk major: pada jendela ini major ditunda lalu dikirim sebagai satu ringkasan saat jendela berakhir. Critical tidak pernah ditunda. */
+export async function inQuietHours(now = Date.now()): Promise<boolean> {
+  if ((await metaGet('quiet_on')) !== '1') return false;
+  const start = Number((await metaGet('quiet_start')) ?? 22), end = Number((await metaGet('quiet_end')) ?? 7), h = new Date(now).getHours();
+  if (start === end) return false;
+  return start < end ? h >= start && h < end : h >= start || h < end;
+}
+export function alertOpened(a: AlertLike, serverName: string): void {
+  fire((async () => {
+    if (a.id && a.level === 'major' && (await inQuietHours())) { await db().exec('UPDATE alerts SET deferred=true WHERE id=$1', [a.id]); return; }
+    if (a.id) await db().exec('UPDATE alerts SET notified_ts=$1, deferred=false WHERE id=$2', [Date.now(), a.id]);
+    await dispatch(alertMessage(a, serverName, 'baru'));
+  })());
+}
 export function alertResolved(a: AlertLike, serverName: string): void { if (a.notified_ts) fire(dispatch(alertMessage(a, serverName, 'pulih'))); }
+/** Dipanggil tiap putaran: setelah jam tenang berakhir, major yang tertunda dan masih terbuka dikirim sebagai satu ringkasan. */
+export async function releaseDeferred(now = Date.now()): Promise<void> {
+  if (await inQuietHours(now)) return;
+  const rows = await db().query("UPDATE alerts a SET deferred=false, notified_ts=$1 FROM servers s WHERE s.id=a.server_id AND a.deferred AND NOT a.resolved AND NOT a.acked RETURNING a.title, a.detail, s.name AS sname", [now]);
+  await db().exec('UPDATE alerts SET deferred=false WHERE deferred AND (resolved OR acked)');   // yang sudah selesai selama jam tenang tidak perlu dikabarkan
+  if (!rows.length) return;
+  fire(dispatch({ kind: 'alert', level: 'major', importance: RANK.major, title: `${ICON.major} ${rows.length} peringatan selama jam tenang`, text: rows.slice(0, 15).map((r) => `- ${r.sname}: ${r.title} (${r.detail})`).join('\n') + (rows.length > 15 ? `\n... dan ${rows.length - 15} lainnya` : '') + '\nBuka AI Ops untuk detail.' }));
+}
 export async function reminders(): Promise<void> {
   const every = Number((await metaGet('reminder_min')) ?? 60) * 60_000; if (!(every > 0)) return;
   // UPDATE ... RETURNING mengklaim baris secara atomik, jadi pengingat tidak ganda walau pemeriksaan berjalan bersamaan
-  const due = await db().query("UPDATE alerts a SET notified_ts=$1 FROM servers s WHERE s.id=a.server_id AND NOT a.resolved AND NOT a.acked AND a.level='kritis' AND a.notified_ts IS NOT NULL AND a.notified_ts<$2 RETURNING a.*, s.name AS sname", [Date.now(), Date.now() - every]);
+  const due = await db().query("UPDATE alerts a SET notified_ts=$1 FROM servers s WHERE s.id=a.server_id AND NOT a.resolved AND NOT a.acked AND a.level='critical' AND a.notified_ts IS NOT NULL AND a.notified_ts<$2 RETURNING a.*, s.name AS sname", [Date.now(), Date.now() - every]);
   for (const a of due) fire(dispatch(alertMessage(a as AlertLike, a.sname, 'ulang')));
 }
 export function approvalPending(cmd: { command: string }, runName: string, serverName: string): void {
-  fire(dispatch({ kind: 'approval', level: 'info', importance: 3, title: `[PERSETUJUAN] ${runName || 'Setup'} di ${serverName || 'server'}`, text: `Agen meminta izin menjalankan:\n${String(cmd.command).slice(0, 400)}\nBuka AI Ops > Ringkasan untuk menyetujui atau menolak.` }));
+  fire(dispatch({ kind: 'approval', level: 'info', importance: 4, title: `[PERSETUJUAN] ${runName || 'Setup'} di ${serverName || 'server'}`, text: `Agen meminta izin menjalankan:\n${String(cmd.command).slice(0, 400)}\nBuka AI Ops > Ringkasan untuk menyetujui atau menolak.` }));
 }
 export async function runFinished(run: { name: string; status: string; summary?: string }): Promise<void> {
   if ((await metaGet('notify_runs')) === '0') return;
-  const badRun = run.status === 'failed'; fire(dispatch({ kind: 'run', level: badRun ? 'peringatan' : 'info', importance: badRun ? 3 : 2, title: `${badRun ? '[GAGAL]' : '[SELESAI]'} ${run.name}`, text: String(run.summary ?? '').slice(0, 600) }));
+  const badRun = run.status === 'failed'; fire(dispatch({ kind: 'run', level: badRun ? 'major' : 'info', importance: badRun ? 4 : 3, title: `${badRun ? '[GAGAL]' : '[SELESAI]'} ${run.name}`, text: String(run.summary ?? '').slice(0, 600) }));
 }
 export function recommendationReady(serverName: string, title: string, diagnosis: string, source: string): void {
-  fire(dispatch({ kind: 'recommendation', level: 'info', importance: 3, title: `[REKOMENDASI] ${serverName}: ${title}`, text: `${diagnosis.slice(0, 500)}\n(${source === 'llm' ? 'disusun model' : 'playbook'}) Buka AI Ops > Insiden untuk meninjau dan menyetujui.` }));
+  fire(dispatch({ kind: 'recommendation', level: 'info', importance: 4, title: `[REKOMENDASI] ${serverName}: ${title}`, text: `${diagnosis.slice(0, 500)}\n(${source === 'llm' ? 'disusun model' : 'playbook'}) Buka AI Ops > Insiden untuk meninjau dan menyetujui.` }));
 }
 export function recommendationResult(serverName: string, recId: number, ok: boolean, text: string): void {
-  fire(dispatch({ kind: 'recommendation', level: ok ? 'info' : 'peringatan', importance: ok ? 2 : 3, title: `${ok ? '[SELESAI]' : '[GAGAL]'} Perbaikan #${recId} di ${serverName}`, text }));
+  fire(dispatch({ kind: 'recommendation', level: ok ? 'info' : 'major', importance: ok ? 3 : 4, title: `${ok ? '[SELESAI]' : '[GAGAL]'} Perbaikan #${recId} di ${serverName}`, text }));
 }
 export async function history() { return db().query('SELECT * FROM notifications ORDER BY id DESC LIMIT 30'); }

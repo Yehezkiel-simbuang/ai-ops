@@ -32,7 +32,7 @@ describe('Tambahkan ke standar', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Tambahkan ke standar' }));
     expect(screen.getByRole('button', { name: 'Tambahkan ke daftar' })).toBeDisabled();   // belum dicoba
     await userEvent.type(screen.getByLabelText('Judul pemeriksaan'), 'antrean'); await userEvent.type(screen.getByLabelText('Perintah pemeriksaan'), 'cat /proc/loadavg | cut -d" " -f1');
-    await userEvent.type(screen.getByLabelText('Ambang peringatan'), '5'); await userEvent.type(screen.getByLabelText('Ambang kritis'), '10');
+    await userEvent.type(screen.getByLabelText('Batas Major'), '5'); await userEvent.type(screen.getByLabelText('Batas Critical'), '10');
     await userEvent.click(screen.getByRole('button', { name: 'Coba' })); await screen.findByText(/nilai terbaca: 7/);
     await userEvent.click(screen.getByRole('button', { name: 'Tambahkan ke daftar' })); expect(screen.getByText('foo-agent: antrean')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Simpan ke standar dan pasang di server ini \(2\)/ }));
@@ -60,7 +60,7 @@ describe('Standar: layanan buatan sendiri', () => {
     base: [],
     packs: [
       { id: 'mysql', label: 'MySQL / MariaDB', checks: [] },
-      { id: 'custom-foo-agent', label: 'Foo Agent', custom: true, unit: 'foo-agent', checks: [{ key: 'pack:custom-foo-agent:foo-agent: layanan aktif', name: 'foo-agent: layanan aktif', typeLabel: 'Layanan systemd aktif', unit: 'nilai', dir: 'gt', numeric: false, warn: null, crit: null, confirm: 2, default: { warn: null, crit: null, confirm: 2 }, custom: false, stats: null, servers: 1 }] }
+      { id: 'custom-foo-agent', label: 'Foo Agent', custom: true, unit: 'foo-agent', checks: [{ key: 'pack:custom-foo-agent:foo-agent: layanan aktif', name: 'foo-agent: layanan aktif', typeLabel: 'Layanan systemd aktif', unit: 'nilai', dir: 'gt', numeric: false, minor: null, warn: null, crit: null, confirm: 2, default: { minor: null, warn: null, crit: null, confirm: 2 }, custom: false, stats: null, servers: 1 }] }
     ]
   };
 

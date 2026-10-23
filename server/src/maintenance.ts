@@ -79,7 +79,7 @@ export async function complete(id: number, by: string, notes = '', doneAt = Date
 export async function logFor(serverId: number) { return db().query('SELECT * FROM maintenance_log WHERE server_id=$1 ORDER BY done_at DESC LIMIT 100', [serverId]); }
 
 // ---------- ringkasan harian
-export interface DigestItem { kind: 'tugas' | 'rotasi' | 'kedaluwarsa'; text: string; overdue: boolean }
+export interface DigestItem { kind: 'tugas' | 'rotasi' | 'kedaluwarsa' | 'minor'; text: string; overdue: boolean }
 export async function digestItems(now = Date.now()): Promise<DigestItem[]> {
   const out: DigestItem[] = [];
   for (const t of await db().query('SELECT m.*, s.name AS server_name FROM maintenance_tasks m LEFT JOIN servers s ON s.id=m.server_id WHERE m.enabled AND m.due_at < $1 ORDER BY m.due_at', [now + 3 * DAY])) {
@@ -91,6 +91,7 @@ export async function digestItems(now = Date.now()): Promise<DigestItem[]> {
   for (const c of await db().query('SELECT c.label, c.expires_at, s.name AS server_name FROM credentials c LEFT JOIN servers s ON s.id=c.server_id WHERE c.expires_at IS NOT NULL AND c.expires_at < $1 ORDER BY c.expires_at', [now + 14 * DAY])) {
     const d = Math.ceil((c.expires_at - now) / DAY); out.push({ kind: 'kedaluwarsa', overdue: d < 0, text: `${c.server_name ?? 'Umum'}: "${c.label}" ${d < 0 ? 'sudah kedaluwarsa ' + -d + ' hari lalu' : 'kedaluwarsa dalam ' + d + ' hari'}` });
   }
+  for (const a of await db().query("SELECT a.title, a.detail, s.name AS server_name FROM alerts a JOIN servers s ON s.id=a.server_id WHERE a.level='minor' AND NOT a.resolved AND NOT a.acked ORDER BY a.ts DESC LIMIT 30")) out.push({ kind: 'minor', overdue: false, text: `${a.server_name}: ${a.title} (${a.detail}) [minor]` });
   return out;
 }
 const localDay = (ms: number): string => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -102,6 +103,6 @@ export async function runDigest(now = Date.now()): Promise<boolean> {
   await metaSet('digest_last', today);   // ditandai lebih dulu: tidak dikirim ganda walau pemeriksaan berjalan bersamaan
   const items = await digestItems(now); if (!items.length) return false;
   const late = items.filter((i) => i.overdue).length;
-  try { await Notify.dispatch({ kind: 'maintenance', level: late ? 'peringatan' : 'info', importance: late ? 3 : 2, title: `[PEMELIHARAAN] ${items.length} hal perlu perhatian${late ? ` (${late} terlambat)` : ''}`, text: items.slice(0, 15).map((i) => '- ' + i.text).join('\n') + (items.length > 15 ? `\n... dan ${items.length - 15} lainnya` : '') + '\nBuka AI Ops > Inventaris untuk menyelesaikannya.' }); } catch (e) { log().warn({ err: (e as Error).message }, 'ringkasan pemeliharaan gagal dikirim'); }
+  try { await Notify.dispatch({ kind: 'maintenance', level: late ? 'major' : 'info', importance: late ? 4 : 3, title: `[PEMELIHARAAN] ${items.length} hal perlu perhatian${late ? ` (${late} terlambat)` : ''}`, text: items.slice(0, 15).map((i) => '- ' + i.text).join('\n') + (items.length > 15 ? `\n... dan ${items.length - 15} lainnya` : '') + '\nBuka AI Ops > Inventaris untuk menyelesaikannya.' }); } catch (e) { log().warn({ err: (e as Error).message }, 'ringkasan pemeliharaan gagal dikirim'); }
   return true;
 }

@@ -15,7 +15,7 @@ import { ago } from '@/lib/format';
 import { webQ } from './queries';
 import type { NewWebCheck, VercelForm, WebCheck, WebKind, WebStatus } from './types';
 
-export const STATUS: Record<WebStatus, [Tone, string]> = { belum: ['mute', 'Belum diperiksa'], sehat: ['ok', 'Sehat'], peringatan: ['warn', 'Perhatian'], kritis: ['bad', 'Bermasalah'] };
+export const STATUS: Record<WebStatus, [Tone, string]> = { belum: ['mute', 'Belum diperiksa'], sehat: ['ok', 'Sehat'], minor: ['acc', 'Minor'], major: ['warn', 'Major'], critical: ['bad', 'Critical'] };
 const KINDS: Record<WebKind, string> = { http: 'Situs atau API (buka alamatnya)', vercel: 'Vercel (deploy produksi terakhir)' };
 const MIN_INTERVAL: Record<WebKind, number> = { http: 30, vercel: 300 };
 const URL_OK = /^https?:\/\/\S+$/;

@@ -1,5 +1,6 @@
 // Pemetaan status -> label/warna, satu tempat agar konsisten di semua halaman.
-import type { Environment, RecStatus, RunStatus, ServerStatus } from '@/api/types';
+import type { Environment, Level, RecStatus, RunStatus, ServerStatus } from '@/api/types';
+import { LABEL, TONE, isLevel } from '@/lib/levels';
 import { Badge, type Tone } from './ui/Badge';
 import { IconOk, IconAlert, IconBad, IconTimer, type IconType } from './icons';
 
@@ -34,5 +35,6 @@ export function EnvBadge({ env }: { env: Environment }) {
   return <Badge tone={tone}>{label}</Badge>;
 }
 
-export const IncidentBadge = ({ status }: { status: 'open' | 'resolved' }) => <Badge tone={status === 'open' ? 'bad' : 'ok'}>{status === 'open' ? 'kritis' : 'pulih'}</Badge>;
-export const LevelBadge = ({ level }: { level: string }) => <Badge tone={level === 'kritis' ? 'bad' : 'warn'}>{level}</Badge>;
+/** Insiden terbuka ditandai dengan tingkatnya; insiden selesai dengan "pulih". */
+export const IncidentBadge = ({ status, severity }: { status: 'open' | 'resolved'; severity?: Level }) => (status === 'open' ? <LevelBadge level={severity ?? 'critical'} /> : <Badge tone="ok">pulih</Badge>);
+export const LevelBadge = ({ level }: { level: string }) => (isLevel(level) ? <Badge tone={TONE[level]}>{LABEL[level]}</Badge> : <Badge tone="mute">{level}</Badge>);

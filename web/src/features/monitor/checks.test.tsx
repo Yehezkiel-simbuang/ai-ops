@@ -30,7 +30,7 @@ describe('ChecksPanel berkelompok', () => {
     const { container } = renderWithProviders(<ChecksPanel serverId={1} checks={checks} />);
     const groups = container.querySelectorAll('details.group'); expect(groups).toHaveLength(3);
     expect([...groups].map((d) => (d as HTMLDetailsElement).open)).toEqual([true, true, false]);   // mysql dan redis kritis; NTP normal
-    expect(within(groups[0] as HTMLElement).getByText('1 kritis')).toBeInTheDocument(); expect(within(groups[1] as HTMLElement).getByText(/1 mati/)).toBeInTheDocument();
+    expect(within(groups[0] as HTMLElement).getByText('1 Critical')).toBeInTheDocument(); expect(within(groups[1] as HTMLElement).getByText(/1 mati/)).toBeInTheDocument();
     await userEvent.click(groups[2]!.querySelector('summary')!);
     expect((groups[2] as HTMLDetailsElement).open).toBe(true); expect(within(groups[0] as HTMLElement).getByText('MySQL: layanan aktif')).toBeInTheDocument();
   });

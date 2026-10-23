@@ -13,11 +13,11 @@ const check = (over: Partial<WebCheck> = {}): WebCheck => ({
 
 describe('WebChecksPage', () => {
   it('menampilkan status, uptime, kecepatan rata-rata, dan sisa sertifikat; yang bermasalah menyebut alasannya', async () => {
-    mockApi({ 'GET /api/webchecks': { body: [check(), check({ id: 2, name: 'API', last_status: 'kritis', last_title: 'Status 500', last_detail: 'Status 500 dianggap error.', cert_expires: null, uptime24h: 80 })] } });
+    mockApi({ 'GET /api/webchecks': { body: [check(), check({ id: 2, name: 'API', last_status: 'critical', last_title: 'Status 500', last_detail: 'Status 500 dianggap error.', cert_expires: null, uptime24h: 80 })] } });
     renderWithProviders(<WebChecksPage />);
     expect(await screen.findByText('Toko')).toBeInTheDocument();
     expect(screen.getByText(/uptime 24 jam 99.9% \| rata-rata 140 ms/)).toBeInTheDocument(); expect(screen.getByText(/sertifikat 40 hari lagi/)).toBeInTheDocument();
-    expect(screen.getByText('Sehat', { selector: '.badge' })).toBeInTheDocument(); expect(screen.getByText('Bermasalah')).toBeInTheDocument(); expect(screen.getByText(/Status 500 \(Status 500 dianggap error\.\)/)).toBeInTheDocument();
+    expect(screen.getByText('Sehat', { selector: '.badge' })).toBeInTheDocument(); expect(screen.getByText('Critical')).toBeInTheDocument(); expect(screen.getByText(/Status 500 \(Status 500 dianggap error\.\)/)).toBeInTheDocument();
   });
   it('kosong: ada arahan; tombol Tambah terkunci sampai nama dan alamat http(s) valid, lalu mengirim muatan', async () => {
     const calls = mockApi({ 'GET /api/webchecks': { body: [] }, 'POST /api/webchecks': { body: { id: 3 } } });

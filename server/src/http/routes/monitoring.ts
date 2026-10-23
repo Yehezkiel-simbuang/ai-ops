@@ -31,6 +31,7 @@ export function monitoringRoutes(): Router {
   r.get('/standards', handle(() => Standards.getStandards()));
   r.put('/standards', handle((req) => Standards.setStandard(parse(Standards.standardBody, req.body ?? {}), req.user!.username)));
   r.post('/standards/suggest', handle(() => Standards.suggest()));
+  r.put('/standards/event', handle((req) => Standards.setEventLevel(parse(Standards.eventBody, req.body ?? {}), req.user!.username)));
   r.post('/standards/packs', handle(async (req) => {   // layanan yang belum ada di Standar: simpan sebagai standar baru, dan (bila serverId diisi) langsung pasang di server itu
     const b = parse(Custom.customBody, req.body ?? {}), pack = await Custom.createCustomPack(b, req.user!.username);
     return { pack, added: b.serverId ? await Monitor.applyPack(b.serverId, pack.id) : [] };

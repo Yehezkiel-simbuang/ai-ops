@@ -1,5 +1,5 @@
 // Bentuk data cek HTTP dari backend (/api/webchecks).
-export type WebStatus = 'belum' | 'sehat' | 'peringatan' | 'kritis';
+export type WebStatus = 'belum' | 'sehat' | 'minor' | 'major' | 'critical';
 
 export type WebKind = 'http' | 'vercel';
 

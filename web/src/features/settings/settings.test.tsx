@@ -51,6 +51,35 @@ describe('ChannelsPanel', () => {
   });
 });
 
+describe('ChannelsPanel: tingkat dan jam tenang', () => {
+  const base = { 'GET /api/channels': { body: [] }, 'GET /api/notifications': { body: [] }, 'GET /api/settings': { body: { reminder_min: 60, notify_runs: false, auto_report: false, quiet_on: false, quiet_start: 22, quiet_end: 7 } } };
+  it('kanal baru bawaannya Major; pilihan tingkat memakai istilah Info, Minor, Major, Critical dan mengirim nilai yang dipilih', async () => {
+    const calls = mockApi({ ...base, 'POST /api/channels': { body: { id: 1 } } });
+    renderWithProviders(<ChannelsPanel />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Tambah kanal' }));
+    const dlg = (await screen.findByRole('heading', { name: 'Tambah kanal' })).closest('dialog')!, level = within(dlg).getByRole('combobox', { name: /Kirim mulai tingkat/ }) as HTMLSelectElement;
+    expect(level.value).toBe('major'); expect([...level.options].map((o) => o.value)).toEqual(['major', 'critical', 'minor', 'info']);
+    await userEvent.selectOptions(level, 'critical'); await userEvent.type(within(dlg).getByLabelText(/Token bot/i), '123:abc'); await userEvent.type(within(dlg).getByLabelText(/Chat ID/i), '42');
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Tambah kanal' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/api/channels')).toBe(true)); expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({ min_level: 'critical' });
+  });
+  it('jam tenang untuk Major: kolom jam hanya muncul bila dinyalakan, dan perubahan dikirim ke server', async () => {
+    const calls = mockApi({ ...base, 'POST /api/settings': { body: {} } });
+    renderWithProviders(<ChannelsPanel />);
+    const toggle = await screen.findByRole('checkbox', { name: 'Jam tenang untuk Major' }); expect(screen.queryByLabelText('Jam tenang mulai')).not.toBeInTheDocument();
+    await userEvent.click(toggle); await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/api/settings')).toBe(true));
+    expect(calls.find((c) => c.path === '/api/settings' && c.method === 'POST')!.body).toEqual({ quiet_on: true });
+  });
+  it('dengan jam tenang menyala, jam mulai dan selesai tampil dan disimpan saat selesai diisi', async () => {
+    const on = { ...base, 'GET /api/settings': { body: { reminder_min: 60, notify_runs: false, auto_report: false, quiet_on: true, quiet_start: 22, quiet_end: 7 } }, 'POST /api/settings': { body: {} } };
+    const calls = mockApi(on);
+    renderWithProviders(<ChannelsPanel />);
+    const start = await screen.findByLabelText('Jam tenang mulai'); expect(start).toHaveValue(22); expect(screen.getByLabelText('Jam tenang selesai')).toHaveValue(7);
+    await userEvent.clear(start); await userEvent.type(start, '23'); await userEvent.tab();
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && (c.body as { quiet_start?: number }).quiet_start === 23)).toBe(true));
+  });
+});
+
 describe('SettingsPage: tab', () => {
   const api = { 'GET /api/config': { body: config }, 'GET /api/usage?days=30': { body: { days: 30, total: { input: 0, output: 0, calls: 0, cost: 0, costKnown: false }, byRole: {}, byModel: {}, byDay: {} } }, 'GET /api/settings': { body: { reminder_min: 60, notify_runs: false, auto_report: false } }, 'GET /api/channels': { body: [] }, 'GET /api/notifications': { body: [] }, 'GET /api/audit': { body: [{ ts: Date.now(), actor: 'admin', action: 'login', detail: '1.2.3.4' }] } };
   it('bawaannya tab Model AI; tab lain tidak ikut tampil sampai dipilih', async () => {

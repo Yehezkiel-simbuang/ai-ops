@@ -7,6 +7,7 @@ import { AGENT_FILES } from '../agent-install.js';
 import * as Agents from '../agents.js';
 import { bad } from '../context.js';
 import * as Incidents from '../incidents.js';
+import * as Standards from '../standards.js';
 import { handle } from './handle.js';
 import { agentLimiter } from './middleware/rateLimit.js';
 
@@ -47,11 +48,12 @@ function v1Routes(): Router {
   r.use(express.json({ limit: '256kb', verify: (req, _res, buf) => { (req as express.Request).rawBody = buf; } }));
   r.use(authenticateAgent);
 
-  r.post('/heartbeat', handle((req) => {
+  r.post('/heartbeat', handle(async (req) => {
     const hb = heartbeatBody.safeParse(req.body ?? {});
     if (!hb.success) throw bad('detak jantung tidak valid');
-    return Agents.heartbeat(req.agent!.server_id, hb.data, req.ip ?? '');
+    return { ...(await Agents.heartbeat(req.agent!.server_id, hb.data, req.ip ?? '')), cfg: (await Standards.agentConfig()).version };   // versi konfigurasi: agen mengambil yang baru bila berbeda
   }));
+  r.get('/config', handle(() => Standards.agentConfig()));   // batas dan tingkat kejadian dari halaman Standar
   r.post('/events', handle(async (req) => {
     const b = batchBody.safeParse(req.body ?? {});
     if (!b.success) throw bad('badan tidak valid');

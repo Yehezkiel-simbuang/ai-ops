@@ -17,7 +17,8 @@ const UNIT = '[Unit]\nDescription=AI Ops agent\nAfter=network-online.target\nWan
 export function installGuide(publicUrl: string, cred: { keyId: string; secret: string }, opt: { exec: boolean; services: string[] }) {
   const config = {
     server_url: publicUrl, key_id: cred.keyId, secret: cred.secret, interval_seconds: 30, heartbeat_seconds: 60, allow_exec: opt.exec,
-    thresholds: { load_per_core_crit: 3, mem_avail_pct_crit: 5, disk_pct_crit: 95, io_psi_crit: 50, disk_path: '/' }, services: opt.services
+    thresholds: { load_per_core_crit: 3, mem_avail_pct_crit: 5, disk_pct_crit: 95, io_psi_crit: 50, disk_path: '/' }, services: opt.services,
+    security: { enabled: true, ssh_fail_crit: 30, ssh_fail_window_seconds: 600, root_login_crit: false, hold_minutes: 120 }
   };
   const configText = JSON.stringify(config, null, 2);
   const script = [

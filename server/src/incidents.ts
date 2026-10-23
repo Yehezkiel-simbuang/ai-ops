@@ -6,6 +6,7 @@ import { z } from 'zod';
 import * as Agents from './agents.js';
 import { audit, bad, db, HttpError, log } from './context.js';
 import { forRole, type RoleChat } from './llm.js';
+import { isLevel, rank, RANK, type Level } from './levels.js';
 import * as Monitor from './monitor.js';
 import * as Notify from './notify.js';
 import { classify } from './safety.js';
@@ -16,6 +17,7 @@ const dep: { llm: RoleChat } = { llm: forRole };
 export function configure(o: { llm?: RoleChat }): void { if (o.llm) dep.llm = o.llm; }
 
 // ---------- kejadian masuk dari agen
+// severity dari agen: info | minor | major | critical (nilai lain dianggap critical)
 export const eventSchema = z.object({
   id: z.string().min(4).max(64), type: z.enum(['open', 'still_open', 'resolved']), key: z.string().min(1).max(120), title: z.string().max(200).default(''), kind: z.string().max(40).default('other'),
   severity: z.string().max(20).default('critical'), value: z.number().finite().nullish(), detail: z.string().max(600).default(''), ts: z.number().int().positive(),
@@ -39,17 +41,22 @@ export async function ingest(serverId: number, events: AgentEvent[]): Promise<{ 
       }
       continue;
     }
-    const dg = JSON.stringify(e.diag ?? []);
+    const dg = JSON.stringify(e.diag ?? []), level: Level = isLevel(e.severity) ? e.severity : 'critical';
     const existing = await db().one("SELECT * FROM incidents WHERE server_id=$1 AND key=$2 AND status='open'", [serverId, e.key]);
     if (existing) {
+      if (level !== existing.severity) {   // agen melaporkan tingkat baru (naik atau turun)
+        await db().exec('UPDATE incidents SET severity=$1 WHERE id=$2', [level, existing.id]);
+        await Monitor.syncAlerts(serverId, [{ key: alertKey, on: true, level, title: e.title || e.key, detail: e.detail }], 'agent');   // naik: dikabari lagi; turun: diperbarui diam-diam
+        if (rank(level) >= RANK.major && rank(existing.severity) < RANK.major) void generate(existing.id).catch((err) => log().warn({ err: (err as Error).message, incident: existing.id }, 'gagal menyusun rekomendasi'));
+      }
       if (e.diag?.length) await db().exec('UPDATE incidents SET last_event=$1, detail=$2, value=$3, event_count=event_count+1, diag=$4::jsonb WHERE id=$5', [now, e.detail, e.value ?? null, dg, existing.id]);
       else await db().exec('UPDATE incidents SET last_event=$1, detail=$2, value=$3, event_count=event_count+1 WHERE id=$4', [now, e.detail, e.value ?? null, existing.id]);
       continue;
     }
-    const inc = await db().one<{ id: number }>("INSERT INTO incidents(server_id,key,kind,title,severity,detail,value,opened,last_event,diag) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$8,$9::jsonb) ON CONFLICT DO NOTHING RETURNING id", [serverId, e.key, e.kind, e.title || e.key, 'critical', e.detail, e.value ?? null, now, dg]);
+    const inc = await db().one<{ id: number }>("INSERT INTO incidents(server_id,key,kind,title,severity,detail,value,opened,last_event,diag) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$8,$9::jsonb) ON CONFLICT DO NOTHING RETURNING id", [serverId, e.key, e.kind, e.title || e.key, level, e.detail, e.value ?? null, now, dg]);
     if (!inc) continue;
-    await Monitor.syncAlerts(serverId, [{ key: alertKey, on: true, level: 'kritis', title: e.title || e.key, detail: e.detail }], 'agent');
-    void generate(inc.id).catch((err) => log().warn({ err: (err as Error).message, incident: inc.id }, 'gagal menyusun rekomendasi'));
+    await Monitor.syncAlerts(serverId, [{ key: alertKey, on: true, level, title: e.title || e.key, detail: e.detail }], 'agent');
+    if (rank(level) >= RANK.major) void generate(inc.id).catch((err) => log().warn({ err: (err as Error).message, incident: inc.id }, 'gagal menyusun rekomendasi'));
   }
   return { accepted, duplicates };
 }
@@ -94,6 +101,22 @@ export function playbook(inc: { key: string; kind: string; title: string; detail
     case 'log': {
       const m = /^log:(.+)$/.exec(inc.key);
       return { diagnosis: `Kemunculan pesan di log melonjak (${m?.[1] ?? 'log'}). Baca baris terbaru untuk menentukan penyebab.`, steps: [read('Ekor log', 'journalctl -n 80 --no-pager', 'Konteks kejadian di journal sistem.')], verify: 'uptime' };
+    }
+    case 'security': {
+      // Hanya langkah baca: apa yang harus DIUBAH (blokir IP, hapus akun, cabut kunci) adalah keputusan pemilik server setelah melihat buktinya.
+      const topic = arg || 'umum';
+      const common = [read('Login terakhir', 'last -n 25 -w', 'Siapa yang masuk, dari mana, dan kapan.'), read('Koneksi SSH yang sedang aktif', "ss -tn state established '( sport = :22 )' | head -20", 'Memastikan tidak ada sesi yang tidak dikenal sedang terbuka.')];
+      const diag: Record<string, { text: string; steps: StepSpec[] }> = {
+        ssh_fail: { text: 'Banyak login SSH gagal dalam waktu singkat: kemungkinan brute force. Periksa apakah ada yang berhasil masuk setelah rentetan gagal, dan dari IP mana. Memblokir IP atau mengunci login password adalah keputusan Anda.', steps: [read('Percobaan gagal terbaru', `${sudo}journalctl -u ssh -u sshd -n 80 --no-pager | grep -E "Failed|Invalid" | tail -40`, 'Melihat pola nama pengguna dan sumber.'), read('Login yang berhasil', `${sudo}journalctl -u ssh -u sshd -n 200 --no-pager | grep Accepted | tail -15`, 'Memastikan tidak ada yang berhasil masuk dari sumber yang sama.'), ...common] },
+        root_login: { text: 'Ada login root yang berhasil lewat SSH. Bila itu bukan Anda atau tim Anda, anggap server terkompromi: periksa sesi aktif dan kunci yang dipakai.', steps: [...common, read('Kunci yang diizinkan untuk root', `${sudo}ls -la /root/.ssh`, 'Melihat kapan berkas kunci terakhir diubah.')] },
+        users: { text: 'Ada akun baru yang bisa login (atau akun lama berubah shell/UID). Pastikan itu perubahan yang disengaja.', steps: [read('Akun yang bisa login', "getent passwd | cut -d: -f1,3,6,7 | grep -Ev ':(/usr)?/s?bin/(nologin|false)$'", 'Daftar akun dengan UID, folder rumah, dan shell.'), read('Akun bersandi UID 0', "getent passwd | awk -F: '$3==0'", 'Hanya root yang seharusnya UID 0.'), ...common] },
+        keys: { text: 'Berkas authorized_keys berubah: ada kunci SSH yang ditambah atau diganti. Kunci tak dikenal berarti ada pintu masuk baru.', steps: [read('Berkas kunci dan waktu ubahnya', `${sudo}ls -la --time-style=full-iso /root/.ssh /home/*/.ssh`, 'Melihat berkas mana yang berubah dan kapan.'), read('Jenis dan komentar kunci (tanpa isi kunci)', `${sudo}cat /root/.ssh/authorized_keys /home/*/.ssh/authorized_keys | cut -d' ' -f1,3-`, 'Mencocokkan dengan kunci yang Anda kenal; isi kunci sengaja tidak ditampilkan.'), ...common] },
+        sudoers: { text: 'Aturan sudo berubah. Perubahan seperti NOPASSWD untuk akun biasa memberi akses root tanpa sandi.', steps: [read('Isi sudoers.d', `${sudo}ls -la --time-style=full-iso /etc/sudoers.d`, 'Berkas mana yang baru atau berubah.'), read('Aturan NOPASSWD', `${sudo}grep -rn NOPASSWD /etc/sudoers /etc/sudoers.d`, 'Akun yang bisa sudo tanpa sandi.'), read('Anggota grup sudo', 'getent group sudo wheel', 'Siapa yang punya hak sudo.')] },
+        sshd: { text: 'Konfigurasi sshd berubah. Periksa pengaturan yang melemahkan keamanan (PermitRootLogin, PasswordAuthentication, port).', steps: [read('Pengaturan sshd yang penting', 'grep -Ein "^[[:space:]]*(permitrootlogin|passwordauthentication|port|pubkeyauthentication|allowusers)" /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf', 'Nilai yang tertulis di berkas; bila ada beberapa, yang paling awal dibaca sshd yang berlaku.'), read('Berkas konfigurasi dan waktu ubahnya', 'ls -la --time-style=full-iso /etc/ssh/sshd_config /etc/ssh/sshd_config.d', 'Berkas mana yang berubah.')] },
+        ports: { text: 'Ada port baru yang mendengarkan dari luar. Cari prosesnya dan pastikan memang layanan yang Anda pasang.', steps: [read('Port mendengarkan beserta prosesnya', `${sudo}ss -ltnp`, 'Proses yang memegang tiap port.'), read('Waktu mulai proses', 'ps -eo pid,lstart,user,comm --sort=start_time | tail -15', 'Proses yang baru dijalankan.')] }
+      };
+      const d = diag[topic] ?? { text: `${inc.title}: ${inc.detail}. Kumpulkan bukti dulu sebelum mengubah apa pun.`, steps: common };
+      return { diagnosis: d.text, steps: d.steps, verify: 'last -n 5 -w' };
     }
     case 'port': case 'http':
       return { diagnosis: 'Layanan tidak menjawab di port/URL yang dipantau. Pastikan prosesnya hidup dan port benar-benar didengarkan.',
@@ -142,9 +165,9 @@ export async function generate(incidentId: number, opt: { useModel?: boolean } =
 
 export async function listIncidents(status?: string) {
   const where = status === 'open' || status === 'resolved' ? 'WHERE i.status=$1' : '';
-  const rows = await db().query(`SELECT i.id, i.server_id, s.name AS server_name, i.key, i.kind, i.title, i.detail, i.value, i.opened, i.last_event, i.resolved_at, i.status, i.event_count,
+  const rows = await db().query(`SELECT i.id, i.server_id, s.name AS server_name, i.key, i.kind, i.title, i.severity, i.detail, i.value, i.opened, i.last_event, i.resolved_at, i.status, i.event_count,
       (SELECT r.status FROM recommendations r WHERE r.incident_id=i.id ORDER BY r.id DESC LIMIT 1) AS rec_status, (SELECT r.id FROM recommendations r WHERE r.incident_id=i.id ORDER BY r.id DESC LIMIT 1) AS rec_id
-    FROM incidents i JOIN servers s ON s.id=i.server_id ${where} ORDER BY i.status, i.opened DESC LIMIT 100`, where ? [status] : []);
+    FROM incidents i JOIN servers s ON s.id=i.server_id ${where} ORDER BY i.status, CASE i.severity WHEN 'critical' THEN 0 WHEN 'major' THEN 1 WHEN 'minor' THEN 2 ELSE 3 END, i.opened DESC LIMIT 100`, where ? [status] : []);
   return rows;
 }
 export async function incidentDetail(id: number) {

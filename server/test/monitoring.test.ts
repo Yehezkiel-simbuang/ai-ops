@@ -72,15 +72,15 @@ describe('paket dan peringatan layanan', () => {
     const c = await by('mysql_commitwait'); batchOut = { [c.id]: { exitCode: 0, stdout: '42' } };
     const r1 = await Monitor.check(sid); expect(r1.ok).toBe(true); expect((r1 as any).checks.find((x: any) => x.id === c.id).status).toBe('crit');
     expect((await openAlerts()).some((a) => a.key === `chk:${c.id}`)).toBe(false);
-    await Monitor.check(sid); const a = (await openAlerts()).find((x) => x.key === `chk:${c.id}`); expect(a?.level).toBe('kritis'); expect(a?.source).toBe('service');
+    await Monitor.check(sid); const a = (await openAlerts()).find((x) => x.key === `chk:${c.id}`); expect(a?.level).toBe('critical'); expect(a?.source).toBe('service');
   });
   it('peringatan yang sama tidak digandakan dan indeks unik menjaganya', async () => {
     const before = (await openAlerts()).length; await Monitor.check(sid); expect((await openAlerts()).length).toBe(before);
-    const c = await by('mysql_commitwait'); await expect(h.db.exec("INSERT INTO alerts(server_id,ts,level,key,title) VALUES($1,$2,'kritis',$3,'dup')", [sid, Date.now(), `chk:${c.id}`])).rejects.toThrow(/duplicate|unik|unique/i);
+    const c = await by('mysql_commitwait'); await expect(h.db.exec("INSERT INTO alerts(server_id,ts,level,key,title) VALUES($1,$2,'critical',$3,'dup')", [sid, Date.now(), `chk:${c.id}`])).rejects.toThrow(/duplicate|unik|unique/i);
   });
   it('layanan systemd mati: kritis pada pemeriksaan pertama; menonaktifkan menutup peringatan', async () => {
     const u = await by('systemd'); batchOut = { [u.id]: { exitCode: 3, stdout: 'inactive' } }; await Monitor.check(sid);
-    expect((await openAlerts()).some((a) => a.key === `chk:${u.id}` && a.level === 'kritis')).toBe(true);
+    expect((await openAlerts()).some((a) => a.key === `chk:${u.id}` && a.level === 'critical')).toBe(true);
     await h.call('PUT', `/api/checks/${u.id}`, { enabled: false }); expect((await openAlerts()).some((a) => a.key === `chk:${u.id}`)).toBe(false);
     await h.call('PUT', `/api/checks/${u.id}`, { enabled: true }); batchOut = {};
   });
@@ -104,10 +104,10 @@ describe('paket dan peringatan layanan', () => {
 
 describe('notifikasi', () => {
   it('daftar kanal tidak membocorkan token/sandi dan menolak konfigurasi tak lengkap', async () => {
-    await Notify.save({ type: 'webhook', name: 'Slack uji', min_level: 'kritis', config: { url: `http://127.0.0.1:${recvPort}/hook/slack`, format: 'slack' } });
-    await Notify.save({ type: 'telegram', name: 'Telegram uji', min_level: 'kritis', config: { token: '123:ABCDEF', chatId: '777', apiBase: `http://127.0.0.1:${recvPort}` } });
-    await Notify.save({ type: 'ntfy', name: 'ntfy uji', min_level: 'peringatan', config: { url: `http://127.0.0.1:${recvPort}`, topic: 'topik-rahasia' } });
-    await Notify.save({ type: 'email', name: 'Email uji', min_level: 'kritis', config: { host: '127.0.0.1', port: String(smtpPort), secure: 'none', user: 'akun', pass: 'sandi-email', from: 'aiops@contoh.id', to: 'saya@contoh.id, lain@contoh.id' } });
+    await Notify.save({ type: 'webhook', name: 'Slack uji', min_level: 'critical', config: { url: `http://127.0.0.1:${recvPort}/hook/slack`, format: 'slack' } });
+    await Notify.save({ type: 'telegram', name: 'Telegram uji', min_level: 'critical', config: { token: '123:ABCDEF', chatId: '777', apiBase: `http://127.0.0.1:${recvPort}` } });
+    await Notify.save({ type: 'ntfy', name: 'ntfy uji', min_level: 'major', config: { url: `http://127.0.0.1:${recvPort}`, topic: 'topik-rahasia' } });
+    await Notify.save({ type: 'email', name: 'Email uji', min_level: 'critical', config: { host: '127.0.0.1', port: String(smtpPort), secure: 'none', user: 'akun', pass: 'sandi-email', from: 'aiops@contoh.id', to: 'saya@contoh.id, lain@contoh.id' } });
     const raw = JSON.stringify((await h.call('GET', '/api/channels')).json); expect(raw).not.toContain('123:ABCDEF'); expect(raw).not.toContain('sandi-email');
     expect((await h.call('POST', '/api/channels', { type: 'ntfy', name: 'x', config: { topic: 'a' } })).status).toBe(400); expect((await h.call('POST', '/api/channels', { type: 'telegram', name: 'x', config: { token: 't' } })).status).toBe(400);
   });
@@ -115,11 +115,11 @@ describe('notifikasi', () => {
   it('kritis dikirim ke webhook, Telegram, ntfy (prioritas 5), dan email (SMTP, AUTH, dua penerima, UTF-8)', async () => {
     const c = await by('mysql_commitwait'); batchOut = { [c.id]: { exitCode: 0, stdout: '42' } }; await Monitor.check(sid); await Monitor.check(sid);
     await until(() => got.hook.length && got.telegram.length && got.ntfy.length && got.mail.length, 6000);
-    expect(got.hook).toHaveLength(1); expect(got.hook[0].body.text).toMatch(/KRITIS/);
+    expect(got.hook).toHaveLength(1); expect(got.hook[0].body.text).toMatch(/CRITICAL/);
     expect(got.telegram).toHaveLength(1); expect(got.telegram[0].body.chat_id).toBe('777'); expect(got.telegram[0].url).toMatch(/^\/bot123:ABCDEF\/sendMessage/);
     expect(got.ntfy).toHaveLength(1); expect(got.ntfy[0].headers.priority).toBe('5'); expect(got.ntfy[0].body).toMatch(/42/);
     const m = got.mail[0]; const subj = Buffer.from((m.raw.match(/Subject: =\?UTF-8\?B\?(.+?)\?=/) ?? [])[1] ?? '', 'base64').toString(), body = Buffer.from(m.raw.split('\r\n\r\n').slice(1).join('').replace(/\r\n/g, ''), 'base64').toString();
-    expect(subj).toMatch(/KRITIS/); expect(body).toMatch(/42/); expect(m.to).toHaveLength(2); expect(m.auth).toBe('|akun|sandi-email');
+    expect(subj).toMatch(/CRITICAL/); expect(body).toMatch(/42/); expect(m.to).toHaveLength(2); expect(m.auth).toBe('|akun|sandi-email');
     await Monitor.check(sid); await sleep(150); expect(got.hook).toHaveLength(1);
   });
   it('level rendah hanya sampai ke kanal dengan level minimum "peringatan"', async () => {
@@ -127,7 +127,7 @@ describe('notifikasi', () => {
     expect(got.ntfy).toHaveLength(2); expect(got.hook).toHaveLength(1); expect(got.telegram).toHaveLength(1);
   });
   it('pemulihan dikabari ke kanal yang pernah dikabari', async () => {
-    batchOut = {}; await Monitor.check(sid); await until(() => got.hook.length === 2, 4000); expect(got.hook[1].body.text).toMatch(/PULIH/); expect(await openAlerts()).toHaveLength(0);
+    batchOut = {}; await Monitor.check(sid); await until(() => got.hook.length === 2, 4000); expect(got.hook[1].body.text).toMatch(/RESOLVED/); expect(await openAlerts()).toHaveLength(0);
   });
   it('pengingat bila kritis belum dilihat, berhenti setelah ditandai dilihat; klaim atomik mencegah ganda', async () => {
     const c = await by('mysql_commitwait'); batchOut = { [c.id]: { exitCode: 0, stdout: '50' } }; await Monitor.check(sid); await Monitor.check(sid); await until(() => got.hook.length === 3, 4000);
@@ -149,7 +149,7 @@ describe('notifikasi', () => {
     expect((await h.call('GET', '/api/notifications')).json.some((n: any) => n.kind === 'alert' && n.ok === true)).toBe(true);
   });
   it('kegagalan pengiriman dicatat (tidak melempar) dan terlihat di riwayat', async () => {
-    await Notify.save({ type: 'webhook', name: 'Mati', min_level: 'semua', config: { url: 'http://127.0.0.1:1/hook' } });
+    await Notify.save({ type: 'webhook', name: 'Mati', min_level: 'info', config: { url: 'http://127.0.0.1:1/hook' } });
     const res = await Notify.dispatch({ kind: 'uji', level: 'info', importance: 1, title: 'x', text: 'y' }); expect(res.some((r) => !r.ok)).toBe(true);
     expect((await Notify.history()).some((n) => n.channel_name === 'Mati' && n.ok === false && n.error)).toBe(true);
   });

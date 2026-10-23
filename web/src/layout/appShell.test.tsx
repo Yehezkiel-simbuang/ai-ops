@@ -46,7 +46,7 @@ describe('AppShell', () => {
   });
 
   it('jumlah yang butuh perhatian muncul di tombol menu saat tertutup, supaya tidak terlewat di layar kecil', async () => {
-    render(overview({ alerts: [{ id: 1, title: 'a', detail: '', level: 'kritis', ts: 1, resolved: false, acked: false }, { id: 2, title: 'b', detail: '', level: 'peringatan', ts: 1, resolved: false, acked: false }] }));
+    render(overview({ alerts: [{ id: 1, title: 'a', detail: '', level: 'critical', ts: 1, resolved: false, acked: false }, { id: 2, title: 'b', detail: '', level: 'major', ts: 1, resolved: false, acked: false }] }));
     expect(await within(screen.getByRole('button', { name: 'Buka menu' })).findByText('2')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Buka menu' })); expect(within(screen.getByRole('button', { name: 'Tutup menu' })).queryByText('2')).not.toBeInTheDocument();
   });

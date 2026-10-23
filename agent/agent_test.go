@@ -76,6 +76,9 @@ type fakeApp struct {
 	queue     []Command
 	results   map[string]CommandResult
 	nowOffset time.Duration
+
+	configJSON    string // jawaban GET /agent/v1/config; bila diisi, detak jantung memberi tahu versinya
+	configFetches int
 }
 
 func newFakeApp(t *testing.T) *fakeApp {
@@ -103,7 +106,16 @@ func newFakeApp(t *testing.T) *fakeApp {
 			w.Write([]byte(`{"ok":true}`))
 		case r.URL.Path == "/agent/v1/heartbeat":
 			f.beats++
-			json.NewEncoder(w).Encode(map[string]any{"ok": true, "poll": f.poll})
+			resp := map[string]any{"ok": true, "poll": f.poll}
+			if f.configJSON != "" {
+				var c struct{ Version string }
+				_ = json.Unmarshal([]byte(f.configJSON), &c)
+				resp["cfg"] = c.Version
+			}
+			json.NewEncoder(w).Encode(resp)
+		case r.URL.Path == "/agent/v1/config":
+			f.configFetches++
+			w.Write([]byte(f.configJSON))
 		case r.URL.Path == "/agent/v1/commands/poll":
 			q := f.queue
 			f.queue = nil
@@ -194,7 +206,7 @@ func TestChecksThresholds(t *testing.T) {
 	}
 	wantCrit := []string{"load", "mem", "disk:/", "io", "svc:nginx", "cmd:failed_jobs", "cmd:workers"}
 	for _, k := range wantCrit {
-		if !got[k].Crit {
+		if got[k].Lvl() != LevelCritical {
 			t.Errorf("%s seharusnya kritis: %+v", k, got[k])
 		}
 	}
@@ -204,7 +216,7 @@ func TestChecksThresholds(t *testing.T) {
 	sys.load, sys.mem, sys.disk, sys.psi = 1, 50, 40, 1
 	for _, c := range BuildChecks(cfg, sys, run) {
 		if c.Key == "load" || c.Key == "mem" || c.Key == "disk:/" || c.Key == "io" {
-			if r := c.Run(context.Background()); r.Crit || r.Unknown {
+			if r := c.Run(context.Background()); r.Lvl() == LevelCritical || r.Unknown {
 				t.Errorf("%s seharusnya normal: %+v", c.Key, r)
 			}
 		}
@@ -214,7 +226,7 @@ func TestUnknownIsNotCritical(t *testing.T) {
 	sys := &fakeSys{cores: 2, err: errors.New("gagal baca"), psiOK: false}
 	for _, c := range BuildChecks(DefaultConfig(), sys, &fakeRun{}) {
 		r := c.Run(context.Background())
-		if r.Crit || !r.Unknown {
+		if r.Lvl() == LevelCritical || !r.Unknown {
 			t.Errorf("%s: gagal ukur harus 'tidak terbaca', bukan kritis: %+v", c.Key, r)
 		}
 	}
@@ -225,16 +237,16 @@ func TestLogCheckTailAndRotation(t *testing.T) {
 	os.WriteFile(p, []byte("lama max_children\nlama max_children\n"), 0o644)
 	c := newLogCheck(LogCheck{Name: "fpm", Path: p, Pattern: "max_children", CritDelta: 3})
 	run := func() Result { return c.Run(context.Background()) }
-	if r := run(); r.Crit || r.Value != 0 {
+	if r := run(); r.Lvl() == LevelCritical || r.Value != 0 {
 		t.Fatalf("pembacaan pertama hanya menandai posisi: %+v", r)
 	}
 	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o644)
 	f.WriteString("x max_children\ny\nz max_children\n")
-	if r := run(); r.Value != 2 || r.Crit {
+	if r := run(); r.Value != 2 || r.Lvl() == LevelCritical {
 		t.Fatalf("2 baru, di bawah batas: %+v", r)
 	}
 	f.WriteString("a max_children\nb max_children\nc max_children\n")
-	if r := run(); r.Value != 3 || !r.Crit {
+	if r := run(); r.Value != 3 || r.Lvl() != LevelCritical {
 		t.Fatalf("3 baru = kritis: %+v", r)
 	}
 	f.Close()
@@ -255,15 +267,15 @@ func TestHTTPCheck(t *testing.T) {
 	cfg.Thresholds = Thresholds{}
 	cfg.HTTP = []HTTPCheck{{Name: "app", URL: s.URL, CritMs: 5000}}
 	c := BuildChecks(cfg, &fakeSys{cores: 1}, &fakeRun{})[0]
-	if r := c.Run(context.Background()); r.Crit {
+	if r := c.Run(context.Background()); r.Lvl() == LevelCritical {
 		t.Fatalf("200 harus normal: %+v", r)
 	}
 	code = 502
-	if r := c.Run(context.Background()); !r.Crit {
+	if r := c.Run(context.Background()); r.Lvl() != LevelCritical {
 		t.Fatalf("502 harus kritis: %+v", r)
 	}
 	s.Close()
-	if r := c.Run(context.Background()); !r.Crit {
+	if r := c.Run(context.Background()); r.Lvl() != LevelCritical {
 		t.Fatalf("tanpa jawaban harus kritis: %+v", r)
 	}
 }

@@ -42,7 +42,7 @@ export function IncidentDetailPage() {
   return (
     <>
       <PageHead title={inc?.title ?? 'Insiden'} icon={IconFlame}>
-        {inc && <IncidentBadge status={inc.status} />}
+        {inc && <IncidentBadge status={inc.status} severity={inc.severity} />}
         <Badge tone="acc" to="/insiden">Semua insiden</Badge>
       </PageHead>
       <Async query={query}>{(d) => <Body d={d} />}</Async>

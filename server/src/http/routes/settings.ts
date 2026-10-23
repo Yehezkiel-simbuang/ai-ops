@@ -12,7 +12,8 @@ const roleBody = z.object({ role: z.string(), provider: z.string(), model: z.str
 const priceBody = z.object({ provider: z.string(), model: z.string(), in: z.union([z.string(), z.number(), z.null()]).optional(), out: z.union([z.string(), z.number(), z.null()]).optional() });
 const settingsBody = z.object({
   auto_report: z.boolean().optional(), reminder_min: z.coerce.number().optional(), notify_runs: z.boolean().optional(),
-  digest_enabled: z.boolean().optional(), digest_hour: z.coerce.number().int().min(0).max(23).optional()
+  digest_enabled: z.boolean().optional(), digest_hour: z.coerce.number().int().min(0).max(23).optional(),
+  quiet_on: z.boolean().optional(), quiet_start: z.coerce.number().int().min(0).max(23).optional(), quiet_end: z.coerce.number().int().min(0).max(23).optional()
 });
 
 const flag = (v: boolean) => (v ? '1' : '0');
@@ -20,13 +21,17 @@ const flag = (v: boolean) => (v ? '1' : '0');
 async function readSettings() {
   return {
     auto_report: (await metaGet('auto_report')) === '1', reminder_min: Number((await metaGet('reminder_min')) ?? 60), notify_runs: (await metaGet('notify_runs')) !== '0',
-    digest_enabled: (await metaGet('digest_enabled')) !== '0', digest_hour: Number((await metaGet('digest_hour')) ?? 8)
+    digest_enabled: (await metaGet('digest_enabled')) !== '0', digest_hour: Number((await metaGet('digest_hour')) ?? 8),
+    quiet_on: (await metaGet('quiet_on')) === '1', quiet_start: Number((await metaGet('quiet_start')) ?? 22), quiet_end: Number((await metaGet('quiet_end')) ?? 7)
   };
 }
 
 async function saveSettings(b: z.infer<typeof settingsBody>): Promise<void> {
   if (b.digest_enabled != null) await metaSet('digest_enabled', flag(b.digest_enabled));
   if (b.digest_hour != null) await metaSet('digest_hour', String(b.digest_hour));
+  if (b.quiet_on != null) await metaSet('quiet_on', flag(b.quiet_on));
+  if (b.quiet_start != null) await metaSet('quiet_start', String(b.quiet_start));
+  if (b.quiet_end != null) await metaSet('quiet_end', String(b.quiet_end));
   if (b.auto_report != null) await metaSet('auto_report', flag(b.auto_report));
   if (b.reminder_min != null) await metaSet('reminder_min', String(Math.max(0, Math.min(1440, b.reminder_min || 0))));
   if (b.notify_runs != null) await metaSet('notify_runs', flag(b.notify_runs));

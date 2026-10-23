@@ -13,11 +13,11 @@ export function deploymentVerdict(list: Deployment[], now = Date.now()): Verdict
   const latest = [...list].sort((a, b) => b.created - a.created).find((d) => !['CANCELED', 'DELETED'].includes(d.readyState ?? d.state ?? ''));
   if (!latest) return { severity: null, title: 'Belum ada deploy produksi', detail: '' };
   const state = latest.readyState ?? latest.state ?? '';
-  if (state === 'ERROR') return { severity: 'kritis', title: 'Deploy produksi terakhir gagal', detail: [latest.errorCode, latest.errorMessage, latest.inspectorUrl].filter(Boolean).join(' | ') || `Deploy ${latest.uid}` };
-  if (state === 'BLOCKED') return { severity: 'peringatan', title: 'Deploy produksi diblokir', detail: latest.errorMessage || `Deploy ${latest.uid}` };
+  if (state === 'ERROR') return { severity: 'critical', title: 'Deploy produksi terakhir gagal', detail: [latest.errorCode, latest.errorMessage, latest.inspectorUrl].filter(Boolean).join(' | ') || `Deploy ${latest.uid}` };
+  if (state === 'BLOCKED') return { severity: 'major', title: 'Deploy produksi diblokir', detail: latest.errorMessage || `Deploy ${latest.uid}` };
   if (['QUEUED', 'BUILDING', 'INITIALIZING'].includes(state)) {
     const min = Math.floor((now - latest.created) / 60_000);
-    return now - latest.created > STUCK_MS ? { severity: 'peringatan', title: `Deploy macet (${state}, ${min} menit)`, detail: latest.inspectorUrl ?? '' } : { severity: null, title: 'Sedang membangun', detail: `${state}, ${min} menit` };
+    return now - latest.created > STUCK_MS ? { severity: 'major', title: `Deploy macet (${state}, ${min} menit)`, detail: latest.inspectorUrl ?? '' } : { severity: null, title: 'Sedang membangun', detail: `${state}, ${min} menit` };
   }
   return { severity: null, title: 'Sehat', detail: `Deploy ${latest.uid} ${state === 'READY' ? 'siap' : state}` };
 }
@@ -25,7 +25,7 @@ export function deploymentVerdict(list: Deployment[], now = Date.now()): Verdict
 export async function check(cfg: VercelCfg, fetcher: Fetcher): Promise<{ verdict: Verdict; ms: number }> {
   const started = Date.now(), q = new URLSearchParams({ projectId: cfg.project, target: 'production', limit: '5' });
   if (cfg.teamId) q.set('teamId', cfg.teamId);
-  const fail = (title: string, detail: string) => ({ verdict: { severity: 'kritis' as const, title, detail }, ms: Date.now() - started });
+  const fail = (title: string, detail: string) => ({ verdict: { severity: 'critical' as const, title, detail }, ms: Date.now() - started });
   try {
     const res = await fetcher(`https://api.vercel.com/v7/deployments?${q}`, { headers: { authorization: `Bearer ${cfg.token}`, 'user-agent': 'AIOps-Uptime/1.0' }, signal: AbortSignal.timeout(10_000) });
     if (res.status === 401 || res.status === 403) return fail('Token Vercel ditolak', 'Periksa token dan izinnya (untuk proyek milik tim, isi juga ID tim).');

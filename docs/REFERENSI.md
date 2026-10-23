@@ -161,6 +161,42 @@ Alur: agen menilai kondisi **di server sendiri** (CPU, memori, disk, tekanan I/O
 - Kegagalan jaringan: kejadian ditahan di disk (maks. 200) dan dikirim saat aplikasi kembali; backoff eksponensial.
 - Agen mati/jaringan putus diketahui aplikasi (peringatan "agen tidak mengirim detak jantung" ke kanal notifikasi Anda).
 
+**Tingkat keparahan: Info, Minor, Major, Critical**
+
+| Tingkat | Artinya | Notifikasi bawaan |
+|---|---|---|
+| **Critical** | tindak sekarang | langsung |
+| **Major** | tindak hari ini | langsung (bisa ditunda saat jam tenang) |
+| **Minor** | lihat kalau sempat | ringkasan harian |
+| **Info** | hanya jejak, tanpa tindakan | tidak dikirim, hanya tercatat |
+
+- **Kanal** menerima SEGERA mulai `min_level`-nya (bawaan Major). Kanal bisa diturunkan ke Minor atau Info bila ingin semuanya. Persetujuan perintah agen dan kegagalan perbaikan selalu dikirim ke semua kanal.
+- **Jam tenang** (Pengaturan, Notifikasi): Major yang muncul pada jendela itu ditunda dan dikirim sebagai satu ringkasan saat jendela berakhir. Critical tidak pernah ditunda. Bawaan mati.
+- **Batas angka** di halaman Standar punya tiga isian per pemeriksaan: Minor (opsional), Major (kolom `warn`), dan Critical (kolom `crit`), dengan aturan urutan yang sama untuk arah naik dan turun. Peringatan yang tingkatnya naik dikabarkan lagi menurut aturan tingkat barunya; yang turun diperbarui tanpa berisik.
+- **Kejadian perubahan** dari agen (akun baru, kunci SSH, sudoers, sshd, port baru) tidak memakai batas angka: tingkatnya mengikuti jenis kejadian dan bisa diubah di Standar (bawaan: akun, kunci, dan sudoers = Critical; sshd dan port = Major).
+- **Agen mengambil konfigurasi dari aplikasi**: batas beban, memori, disk, I/O, dan login SSH gagal beserta tingkat tiap jenis kejadian diambil dari `GET /agent/v1/config` saat detak jantung memberi tahu versi baru, disimpan di `state_dir/remote-config.json`, dan dipakai walau aplikasi sedang tidak terjangkau. Pemeriksaan yang dimatikan secara lokal (nilai 0) tetap mati. Layanan, port, HTTP, log, dan perintah kustom di berkas agen punya tingkatnya sendiri (`service_levels`, `level`, `major_ms`/`minor_ms`, `major_delta`/`minor_delta`, `major`/`minor`).
+- **Armada agen** (halaman Server): ringkasan hidup, mati, belum terhubung, dan belum dipasang; yang bermasalah di depan. Agen yang berhenti mengirim detak jantung tetap menjadi insiden Critical.
+
+**Pemeriksaan keamanan di agen** (menyala di pemasangan baru; di agen lama tambahkan blok `security` ke berkas konfigurasi lalu restart agen)
+
+Berjalan di server sendiri, hanya membaca, dan hanya melapor yang genting (jenis kejadian `security`):
+
+| Pemeriksaan | Dilaporkan bila |
+|---|---|
+| `sec:ssh_fail` | login SSH gagal dalam jendela waktu mencapai batas (bawaan Minor 5, Major 15, Critical 30 dalam 10 menit; diatur di Standar); laporan menyebut sumber teratas |
+| `sec:root_login` | ada login root yang berhasil lewat SSH (mati bawaan karena banyak server memang memakainya) |
+| `sec:users` | ada akun baru yang bisa login, atau UID/shell akun berubah |
+| `sec:keys` | `authorized_keys` ada yang ditambah atau berubah (yang dilaporkan hanya nama akun, tidak pernah isi kunci) |
+| `sec:sudoers` | `/etc/sudoers` atau `/etc/sudoers.d/*` berubah |
+| `sec:sshd` | `sshd_config` atau `sshd_config.d/*` berubah |
+| `sec:ports` | ada port TCP baru yang mendengarkan selain di loopback |
+
+- **Baseline:** pemeriksaan perubahan membandingkan dengan keadaan saat agen pertama kali berjalan (disimpan di `state_dir/security-baseline.json`, mode 0600). **Anggap keadaan saat pemasangan sudah sah**; bila server sudah terkompromi saat agen dipasang, perubahan lama tidak akan dilaporkan.
+- **Masa lapor:** perubahan dilaporkan selama `hold_minutes` (bawaan 120), lalu diterima sebagai baseline baru dan insiden menutup sendiri. Penghapusan (akun atau kunci dihapus) diterima diam-diam.
+- **Sumber log login:** `/var/log/auth.log` atau `/var/log/secure`; bila tidak ada, `journalctl -u ssh -u sshd`. Agen perlu hak baca ke log itu (grup `adm` atau `systemd-journal`), tidak perlu root.
+- **Konfigurasi** (blok `security` di berkas agen): `enabled`, `ssh_fail_crit` (0 = mati), `ssh_fail_window_seconds`, `root_login_crit`, `watch` (daftar: `users`, `keys`, `sudoers`, `sshd`, `ports`; kosong = semua), `hold_minutes`, `auth_log`.
+- Rekomendasi untuk insiden keamanan hanya berisi langkah **baca** (login terakhir, sesi aktif, berkas kunci, aturan sudo). Memblokir IP, menghapus akun, atau mencabut kunci tetap keputusan Anda.
+
 **Eksekusi perbaikan**: perintah langkah dari rekomendasi diklasifikasi ulang (baca/ubah/blokir); yang diblokir tidak pernah disimpan. Langkah *ubah* yang gagal menghentikan sisa rencana; langkah *baca* yang gagal (alat tidak ada) tidak. Satu eksekusi per server pada satu waktu, persetujuan atomik, semua tercatat di jejak audit.
 
 Uji nyata: `node scripts/e2e-agent.mjs` menjalankan agen Go sungguhan di kontainer Linux terhadap aplikasi Docker (25 pemeriksaan: pasang dari panduan, insiden, rekomendasi, persetujuan, eksekusi oleh agen yang benar-benar mengubah keadaan server, pulih otomatis). Butuh `ALLOWED_HOSTS` memuat `app` di `.env`.

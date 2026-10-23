@@ -18,7 +18,7 @@ async function overview() {
     servers, pending, incidents: incidents.slice(0, 6), recsWaiting,
     maintenance: { overdue: (await Maint.list({ scope: 'overdue' })).length, soon: (await Maint.list({ scope: 'soon' })).length },
     rotationDue: (await Vault.list(null)).filter((c) => c.rotation_overdue).length,
-    runs: (await Store.runs()).slice(0, 5), usage: (await Store.summary(7)).total, alerts: (await Monitor.alerts(null, true)).slice(0, 8),
+    runs: (await Store.runs()).slice(0, 5), usage: (await Store.summary(7)).total, alerts: (await Monitor.alerts(null, true)).filter((a) => (a as { level?: string }).level !== 'info').slice(0, 8),
     setupReady: !!(await Store.getRole('setup')), monitorReady: !!(await Store.getRole('monitor'))
   };
 }

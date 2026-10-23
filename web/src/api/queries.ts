@@ -4,7 +4,7 @@ import { queryOptions, useMutation, useQueryClient, type QueryKey } from '@tanst
 import { get, qs } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type {
-  AgentOverview, AppConfig, AppSettings, AuditEntry, Channel, ChecksMeta, Credential, IncidentDetail, Incident, InventoryRow, MaintenanceLogEntry,
+  AgentOverview, FleetAgent, AppConfig, AppSettings, AuditEntry, Channel, ChecksMeta, Credential, IncidentDetail, Incident, InventoryRow, MaintenanceLogEntry,
   MaintenanceTask, MaintenanceTemplate, MonitorView, NotificationLog, Overview, Run, RunDetail, RunTemplate, Server, ServerProfile, UsageSummary, User
 } from './types';
 
@@ -17,6 +17,7 @@ export const q = {
 
   monitor: (id: number) => queryOptions({ queryKey: ['servers', id, 'monitor'], queryFn: () => get<MonitorView>(`/api/servers/${id}/monitor`), refetchInterval: s(10) }),
   checksMeta: () => queryOptions({ queryKey: ['checks-meta'], queryFn: () => get<ChecksMeta>('/api/checks/meta'), staleTime: Infinity }),
+  agents: () => queryOptions({ queryKey: ['agents'], queryFn: () => get<FleetAgent[]>('/api/agents'), refetchInterval: s(15) }),
   agent: (id: number) => queryOptions({ queryKey: ['servers', id, 'agent'], queryFn: () => get<AgentOverview>(`/api/servers/${id}/agent`), refetchInterval: s(5) }),
 
   incidents: (status: 'open' | 'resolved') => queryOptions({ queryKey: ['incidents', status], queryFn: () => get<Incident[]>(`/api/incidents${qs({ status })}`), refetchInterval: s(6) }),

@@ -6,7 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as Agents from '../src/agents.js';
+import { installGuide } from '../src/agent-install.js';
 import * as Incidents from '../src/incidents.js';
+import * as Safety from '../src/safety.js';
 import * as Servers from '../src/servers.js';
 import * as Store from '../src/store.js';
 import { harness, login, sleep, until, type Harness } from './helpers.js';
@@ -34,7 +36,7 @@ beforeAll(async () => {
   await new Promise<void>((r) => recv.listen(0, '127.0.0.1', () => r())); port = (recv.address() as AddressInfo).port;
   binDir = mkdtempSync(join(tmpdir(), 'agent-bin-')); writeFileSync(join(binDir, 'aiops-agent-linux-amd64'), 'BINER-PALSU'); writeFileSync(join(binDir, 'SHA256SUMS'), 'abc  aiops-agent-linux-amd64\n');
   h = await harness({ AGENT_BIN_DIR: binDir, PUBLIC_URL: 'https://aiops.contoh.com' }); await login(h);
-  await h.call('POST', '/api/channels', { type: 'webhook', name: 'hook', min_level: 'kritis', config: { url: `http://127.0.0.1:${port}/h`, format: 'slack' } });
+  await h.call('POST', '/api/channels', { type: 'webhook', name: 'hook', min_level: 'critical', config: { url: `http://127.0.0.1:${port}/h`, format: 'slack' } });
   sid = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-agen', host: '10.1.1.1', username: 'ops', use_sudo: true })).json.id;
   Servers.setExec(sshExec() as never);
 });
@@ -77,8 +79,8 @@ describe('kejadian kritis -> insiden -> rekomendasi', () => {
     hooks.length = 0; const e = ev();
     const r = await agentCall('POST', '/agent/v1/events', { events: [e] }); expect(r.json).toMatchObject({ ok: true, accepted: 1, duplicates: 0 });
     const list = await incidents(); expect(list).toHaveLength(1); incId = list[0].id; expect(list[0]).toMatchObject({ key: 'svc:nginx', status: 'open', server_name: 'srv-agen' });
-    expect((await Monitor_alerts()).some((a: any) => a.key === 'ag:svc:nginx' && a.source === 'agent' && a.level === 'kritis')).toBe(true);
-    expect(await until(() => hooks.some((t) => /KRITIS/.test(t) && /nginx/.test(t)))).toBeTruthy();
+    expect((await Monitor_alerts()).some((a: any) => a.key === 'ag:svc:nginx' && a.source === 'agent' && a.level === 'critical')).toBe(true);
+    expect(await until(() => hooks.some((t) => /CRITICAL/.test(t) && /nginx/.test(t)))).toBeTruthy();
     expect(await until(async () => (await incidents())[0].rec_status === 'proposed')).toBeTruthy();
     expect(await until(() => hooks.some((t) => /REKOMENDASI/.test(t)))).toBeTruthy();
   });
@@ -101,7 +103,7 @@ describe('kejadian kritis -> insiden -> rekomendasi', () => {
   it('resolved: menutup insiden dan peringatan, mengabarkan pulih, dan mengganti rekomendasi yang belum disetujui', async () => {
     hooks.length = 0; await agentCall('POST', '/agent/v1/events', { events: [ev({ type: 'resolved' })] });
     expect(await incidents('open')).toHaveLength(0); expect((await incidents('resolved')).some((i) => i.id === incId)).toBe(true);
-    expect((await Monitor_alerts()).some((a: any) => a.key === 'ag:svc:nginx')).toBe(false); expect(await until(() => hooks.some((t) => /PULIH/.test(t)))).toBeTruthy();
+    expect((await Monitor_alerts()).some((a: any) => a.key === 'ag:svc:nginx')).toBe(false); expect(await until(() => hooks.some((t) => /RESOLVED/.test(t)))).toBeTruthy();
     expect((await h.call('GET', `/api/incidents/${incId}`)).json.recommendations[0].status).toBe('superseded');
   });
 });
@@ -116,6 +118,20 @@ describe('playbook dan penyempurnaan model', () => {
     expect(Incidents.playbook({ key: 'io', kind: 'io', title: '', detail: '' }, srv).steps.every((s) => s.risk === 'rendah')).toBe(true);
     expect(Incidents.playbook({ key: 'svc:a;rm -rf /', kind: 'service', title: 'x', detail: 'y' }, srv).steps.some((s) => /rm -rf/.test(s.command))).toBe(false);
     expect(Incidents.playbook({ key: 'aneh', kind: 'tak-dikenal', title: 'T', detail: 'D' }, srv).steps.length).toBeGreaterThan(0);
+  });
+  it('insiden keamanan: tiap jenis punya diagnosis dan HANYA langkah baca (tindakan yang mengubah tetap keputusan pemilik), dengan maupun tanpa sudo', () => {
+    for (const use_sudo of [true, false]) for (const topic of ['ssh_fail', 'root_login', 'users', 'keys', 'sudoers', 'sshd', 'ports']) {
+      const plan = Incidents.playbook({ key: `sec:${topic}`, kind: 'security', title: 'T', detail: 'D' }, { use_sudo });
+      expect(plan.diagnosis.length, topic).toBeGreaterThan(30); expect(plan.steps.length, topic).toBeGreaterThan(0);
+      for (const st of plan.steps) { expect(st.risk, `${topic}: ${st.title}`).toBe('rendah'); expect(Safety.classify(st.command).cls, `${topic}: ${st.command}`).toBe('read'); }
+      expect(Safety.classify(plan.verify).cls, `${topic} verify`).toBe('read');
+    }
+    expect(Incidents.playbook({ key: 'sec:entah', kind: 'security', title: 'T', detail: 'D' }, { use_sudo: false }).steps.length).toBeGreaterThan(0);   // jenis baru tanpa playbook khusus tetap aman
+    expect(Incidents.playbook({ key: 'sec:ssh_fail', kind: 'security', title: 'T', detail: 'D' }, { use_sudo: true }).steps[0]!.command).toMatch(/^sudo -n journalctl/);
+  });
+  it('pemasangan agen baru menyalakan pemeriksaan keamanan; login root tetap opt-in', () => {
+    const g = installGuide('https://aiops.contoh', { keyId: 'ak_x', secret: 'x'.repeat(40) }, { exec: false, services: [] });
+    expect(g.config.security).toMatchObject({ enabled: true, ssh_fail_crit: 30, root_login_crit: false }); expect(g.configText).toContain('"security"');
   });
   it('model menyempurnakan rencana, tetapi langkah merusak dibuang dan JSON rusak jatuh ke playbook', async () => {
     await h.call('POST', '/api/provider', { id: 'tiruan', type: 'openai', baseUrl: 'http://127.0.0.1:1', apiKey: 'k' }); await h.call('POST', '/api/role', { role: 'setup', provider: 'tiruan', model: 'm' });
@@ -224,7 +240,7 @@ describe('jalur agen (tanpa SSH): perintah bertanda tangan yang diambil agen', (
 describe('pengawas agen mati dan unduhan', () => {
   it('agen yang berhenti mengirim detak jantung memicu peringatan kritis; kembali hidup menutupnya', async () => {
     hooks.length = 0; await h.db.exec('UPDATE agents SET last_seen=$1, online=true WHERE server_id=$2', [Date.now() - 20 * 60_000, sid]); await Agents.watchdog();
-    const al = (await Monitor_alerts()).find((a: any) => a.key === 'agent:offline'); expect(al?.level).toBe('kritis'); expect(await until(() => hooks.some((t) => /tidak mengirim detak jantung/.test(t)))).toBeTruthy();
+    const al = (await Monitor_alerts()).find((a: any) => a.key === 'agent:offline'); expect(al?.level).toBe('critical'); expect(await until(() => hooks.some((t) => /tidak mengirim detak jantung/.test(t)))).toBeTruthy();
     await agentCall('POST', '/agent/v1/heartbeat', { exec: true }); expect((await Monitor_alerts()).some((a: any) => a.key === 'agent:offline')).toBe(false);
   });
   it('unduhan biner: hanya nama yang diizinkan, tanpa path traversal', async () => {
@@ -243,3 +259,67 @@ describe('pengawas agen mati dan unduhan', () => {
   });
 });
 void sleep;
+
+describe('konfigurasi agen dari halaman Standar dan tingkat kejadian', () => {
+  it('rute /config butuh tanda tangan; berisi batas tiga tingkat untuk dasar dan login SSH gagal, serta tingkat tiap jenis kejadian', async () => {
+    expect((await h.app.inject({ method: 'GET', url: '/agent/v1/config', headers: { host: 'localhost' } })).statusCode).toBe(401);
+    const r = await agentCall('GET', '/agent/v1/config'); expect(r.status).toBe(200);
+    expect(r.json.version).toMatch(/^[0-9a-f]{12}$/);
+    expect(r.json.limits.disk).toEqual({ minor: 75, major: 85, critical: 95 }); expect(r.json.limits.mem).toEqual({ minor: 20, major: 10, critical: 5 }); expect(r.json.limits.ssh_fail).toEqual({ minor: 5, major: 15, critical: 30 });
+    expect(Object.keys(r.json.limits).sort()).toEqual(['disk', 'io', 'load', 'mem', 'ssh_fail']);
+    expect(r.json.events).toMatchObject({ 'sec:users': 'critical', 'sec:keys': 'critical', 'sec:sudoers': 'critical', 'sec:sshd': 'major', 'sec:ports': 'major', 'sec:root_login': 'major' });
+  });
+  it('detak jantung memberi tahu versi konfigurasi; berubah bila Standar diubah, kembali bila dipulihkan', async () => {
+    const v0 = (await agentCall('POST', '/agent/v1/heartbeat', { v: 't', hb: 60 })).json.cfg; expect(v0).toBe((await agentCall('GET', '/agent/v1/config')).json.version);
+    expect((await h.call('PUT', '/api/standards', { key: 'base:disk', minor: 60, warn: 80, crit: 90 })).status).toBe(200);
+    const v1 = (await agentCall('POST', '/agent/v1/heartbeat', { v: 't', hb: 60 })).json.cfg; expect(v1).not.toBe(v0);
+    expect((await agentCall('GET', '/agent/v1/config')).json.limits.disk).toEqual({ minor: 60, major: 80, critical: 90 });
+    await h.call('PUT', '/api/standards', { key: 'base:disk', reset: true }); expect((await agentCall('POST', '/agent/v1/heartbeat', { v: 't', hb: 60 })).json.cfg).toBe(v0);
+  });
+  it('batas login SSH gagal diatur di Standar (kunci agent:ssh_fail) dengan aturan urutan yang sama; tampil di daftar Standar', async () => {
+    const std = (await h.call('GET', '/api/standards')).json; const row = std.agent.find((x: { key: string }) => x.key === 'agent:ssh_fail');
+    expect(row).toMatchObject({ minor: 5, warn: 15, crit: 30, unit: 'kali', numeric: true, custom: false });
+    expect((await h.call('PUT', '/api/standards', { key: 'agent:ssh_fail', minor: 40, warn: 15, crit: 30 })).status).toBe(400);   // minor lebih parah dari major
+    expect((await h.call('PUT', '/api/standards', { key: 'agent:ssh_fail', minor: 10, warn: 25, crit: 60 })).status).toBe(200);
+    expect((await agentCall('GET', '/agent/v1/config')).json.limits.ssh_fail).toEqual({ minor: 10, major: 25, critical: 60 });
+    await h.call('PUT', '/api/standards', { key: 'agent:ssh_fail', reset: true }); expect((await agentCall('GET', '/agent/v1/config')).json.limits.ssh_fail).toEqual({ minor: 5, major: 15, critical: 30 });
+  });
+  it('tingkat jenis kejadian bisa diubah dan dipulihkan; tingkat atau kunci asing ditolak', async () => {
+    const put = (b: object) => h.call('PUT', '/api/standards/event', b);
+    expect((await h.call('GET', '/api/standards')).json.events.find((e: { key: string }) => e.key === 'sec:ports')).toMatchObject({ level: 'major', default: 'major', custom: false });
+    const r = await put({ key: 'sec:ports', level: 'minor' }); expect(r.status).toBe(200); expect(r.json.events.find((e: { key: string }) => e.key === 'sec:ports')).toMatchObject({ level: 'minor', custom: true });
+    expect((await agentCall('GET', '/agent/v1/config')).json.events['sec:ports']).toBe('minor');
+    expect((await put({ key: 'sec:ports', level: 'darurat' })).status).toBe(400); expect((await put({ key: 'sec:tidak-ada', level: 'info' })).status).toBe(400); expect((await put({ key: 'sec:ports' })).status).toBe(400);
+    await put({ key: 'sec:ports', reset: true }); expect((await agentCall('GET', '/agent/v1/config')).json.events['sec:ports']).toBe('major');
+    expect((await h.call('GET', '/api/audit')).json.map((x: { action: string }) => x.action)).toEqual(expect.arrayContaining(['standar.kejadian.ubah', 'standar.kejadian.pulihkan']));
+  });
+  it('insiden yang sudah terbuka mengikuti perubahan tingkat dari agen: naik mengabari lagi dan menyusun rekomendasi, turun diperbarui diam-diam', async () => {
+    hooks.length = 0;
+    const k = 'sec:ssh_fail', send = (severity: string) => agentCall('POST', '/agent/v1/events', { events: [ev({ key: k, kind: 'security', title: 'Login SSH gagal berulang', severity, detail: `tingkat ${severity}` })] });
+    await send('minor'); let i = (await incidents()).find((x) => x.key === k); expect(i.severity).toBe('minor');
+    expect((await h.db.query('SELECT 1 FROM recommendations WHERE incident_id=$1', [i.id])).length).toBe(0);
+    await send('major'); i = (await incidents()).find((x) => x.key === k); expect(i.severity).toBe('major');
+    expect(await until(async () => (await h.call('GET', `/api/incidents/${i.id}`)).json.recommendations.length > 0)).toBeTruthy();   // major menyusun rekomendasi
+    expect(hooks.some((t) => /\[MAJOR\]/.test(t))).toBe(false);   // kanal uji hanya critical: peringatan Major tidak sampai (rekomendasi siap tetap dikabarkan ke semua kanal)
+    await send('critical'); expect((await incidents()).find((x) => x.key === k).severity).toBe('critical'); expect(await until(() => hooks.some((t) => /CRITICAL/.test(t) && /Login SSH gagal berulang/.test(t)))).toBeTruthy();
+    const n = hooks.length; await send('major'); expect((await incidents()).find((x) => x.key === k).severity).toBe('major'); await sleep(200); expect(hooks.length).toBe(n);   // turun: tanpa notifikasi baru
+    expect(((await Monitor_alerts()) as any[]).find((a) => a.key === 'ag:' + k).level).toBe('major');
+    await agentCall('POST', '/agent/v1/events', { events: [ev({ type: 'resolved', key: k, kind: 'security', severity: 'major' })] });
+  });
+});
+
+describe('armada agen', () => {
+  it('daftar semua server dengan status agen: mati dan belum terhubung di atas, hidup, lalu yang belum dipasang', async () => {
+    const mk = async (name: string, host: string) => (await h.call('POST', '/api/servers', { key_path: '/k', name, host, username: 'ops' })).json.id as number;
+    const a = await mk('srv-a-mati', '10.8.0.1'), b = await mk('srv-b-baru', '10.8.0.2'); await mk('srv-c-kosong', '10.8.0.3');
+    const ca = (await h.call('POST', `/api/servers/${a}/agent`, {})).json, cb = (await h.call('POST', `/api/servers/${b}/agent`, {})).json;
+    expect(ca.keyId).toBeTruthy(); expect(cb.keyId).toBeTruthy();
+    await h.db.exec("UPDATE agents SET last_seen=$1, online=false, version='1.0' WHERE server_id=$2", [Date.now() - 600_000, a]);   // pernah terhubung, kini diam
+    const rows = (await h.call('GET', '/api/agents')).json as Array<{ name: string; state: string; version: string; last_seen: number | null; open_keys: number }>;
+    const state = Object.fromEntries(rows.map((r) => [r.name, r.state]));
+    expect(state).toMatchObject({ 'srv-a-mati': 'mati', 'srv-b-baru': 'belum_terhubung', 'srv-c-kosong': 'belum_dipasang', 'srv-agen': 'hidup' });
+    expect(rows.map((r) => r.state)).toEqual([...rows.map((r) => r.state)].sort((x, y) => ['mati', 'belum_terhubung', 'hidup', 'belum_dipasang'].indexOf(x) - ['mati', 'belum_terhubung', 'hidup', 'belum_dipasang'].indexOf(y)));
+    expect(rows.find((r) => r.name === 'srv-a-mati')).toMatchObject({ version: '1.0', open_keys: 0 }); expect(JSON.stringify(rows)).not.toMatch(/secret/i);
+  });
+  it('API armada tetap butuh sesi', async () => { expect((await h.app.inject({ method: 'GET', url: '/api/agents', headers: { host: 'localhost' } })).statusCode).toBe(401); });
+});

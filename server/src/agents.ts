@@ -19,6 +19,15 @@ export async function issue(serverId: number): Promise<{ keyId: string; secret: 
   return { keyId, secret, rotated: !!old };
 }
 export async function remove(serverId: number): Promise<void> { await db().exec('DELETE FROM agents WHERE server_id=$1', [serverId]); await audit('pengguna', 'agen.hapus', `server ${serverId}`); }
+/** Semua server dengan status agennya: hidup, mati (sempat terhubung, kini diam), belum pernah terhubung, atau belum dipasang. Yang bermasalah di atas. */
+export interface FleetRow { server_id: number; name: string; state: 'mati' | 'belum_terhubung' | 'belum_dipasang' | 'hidup'; last_seen: number | null; version: string; exec_enabled: boolean; open_keys: number }
+export async function fleet(): Promise<FleetRow[]> {
+  const rows = await db().query<{ server_id: number; name: string; has: boolean; online: boolean | null; last_seen: number | null; version: string | null; exec_enabled: boolean | null; open_keys: number | null }>(
+    'SELECT s.id AS server_id, s.name, (a.server_id IS NOT NULL) AS has, a.online, a.last_seen, a.version, a.exec_enabled, jsonb_array_length(a.open_keys)::int AS open_keys FROM servers s LEFT JOIN agents a ON a.server_id=s.id ORDER BY s.name');
+  const out: FleetRow[] = rows.map((r) => ({ server_id: r.server_id, name: r.name, state: !r.has ? 'belum_dipasang' : r.last_seen == null ? 'belum_terhubung' : r.online ? 'hidup' : 'mati', last_seen: r.last_seen, version: r.version ?? '', exec_enabled: !!r.exec_enabled, open_keys: r.open_keys ?? 0 }));
+  const rank = { mati: 0, belum_terhubung: 1, hidup: 2, belum_dipasang: 3 };
+  return out.sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name, 'id', { numeric: true }));
+}
 export async function statusOf(serverId: number) {
   const a = await db().one<AgentRow>('SELECT * FROM agents WHERE server_id=$1', [serverId]); if (!a) return null;
   const { secret_enc, ...pub } = a; void secret_enc; return pub;
@@ -88,7 +97,7 @@ export async function watchdog(now = Date.now()): Promise<void> {
     const limit = Math.max(180, 3 * Number(a.hb)) * 1000;
     if (now - a.last_seen > limit) {
       await db().exec('UPDATE agents SET online=false WHERE server_id=$1', [a.server_id]);
-      await syncAlerts(a.server_id, [{ key: 'agent:offline', on: true, level: 'kritis', title: 'Agen tidak mengirim detak jantung', detail: `terakhir terlihat ${Math.round((now - a.last_seen) / 1000)} detik lalu (batas ${Math.round(limit / 1000)} detik). Server mati, jaringan putus, atau agen berhenti.` }], 'agent');
+      await syncAlerts(a.server_id, [{ key: 'agent:offline', on: true, level: 'critical', title: 'Agen tidak mengirim detak jantung', detail: `terakhir terlihat ${Math.round((now - a.last_seen) / 1000)} detik lalu (batas ${Math.round(limit / 1000)} detik). Server mati, jaringan putus, atau agen berhenti.` }], 'agent');
     }
   }
 }

@@ -30,6 +30,12 @@ type Config struct {
 	HTTP       []HTTPCheck `json:"http"`
 	Logs       []LogCheck  `json:"logs"`
 	Commands   []CmdCheck  `json:"commands"`
+	Security   Security    `json:"security"`
+
+	// ServiceLevels: tingkat tiap layanan bila mati (bawaan critical), mis. {"redis": "major"}.
+	ServiceLevels map[string]string `json:"service_levels"`
+
+	tune *Tuning // konfigurasi dari aplikasi (halaman Standar); diisi NewAgent, nil saat uji unit
 }
 
 type Thresholds struct {
@@ -40,33 +46,42 @@ type Thresholds struct {
 	DiskPath        string  `json:"disk_path"`
 }
 type PortCheck struct {
-	Name string `json:"name"`
-	Port int    `json:"port"`
+	Name  string `json:"name"`
+	Port  int    `json:"port"`
+	Level string `json:"level"` // tingkat bila tertutup (bawaan critical)
 }
 type HTTPCheck struct {
 	Name    string `json:"name"`
 	URL     string `json:"url"`
 	CritMs  int    `json:"crit_ms"`
+	MajorMs int    `json:"major_ms"` // opsional: lambat tingkat Major
+	MinorMs int    `json:"minor_ms"` // opsional: lambat tingkat Minor
+	Level   string `json:"level"`    // tingkat bila tidak menjawab atau kode salah (bawaan critical)
 	MinCode int    `json:"min_code"`
 	MaxCode int    `json:"max_code"`
 }
 type LogCheck struct {
-	Name      string  `json:"name"`
-	Path      string  `json:"path"`
-	Pattern   string  `json:"pattern"`
-	CritDelta float64 `json:"crit_delta"` // kenaikan jumlah kemunculan antar pemeriksaan
+	Name       string  `json:"name"`
+	Path       string  `json:"path"`
+	Pattern    string  `json:"pattern"`
+	CritDelta  float64 `json:"crit_delta"`  // kenaikan jumlah kemunculan antar pemeriksaan: Critical
+	MajorDelta float64 `json:"major_delta"` // opsional: Major
+	MinorDelta float64 `json:"minor_delta"` // opsional: Minor
 }
 type CmdCheck struct {
-	Name string  `json:"name"`
-	Cmd  string  `json:"cmd"`
-	Crit float64 `json:"crit"`
-	Dir  string  `json:"dir"` // "gt" (bawaan) atau "lt"
+	Name  string   `json:"name"`
+	Cmd   string   `json:"cmd"`
+	Crit  float64  `json:"crit"`
+	Major *float64 `json:"major"` // opsional
+	Minor *float64 `json:"minor"` // opsional
+	Dir   string   `json:"dir"`   // "gt" (bawaan) atau "lt"
 }
 
 func DefaultConfig() Config {
 	return Config{
 		IntervalSeconds: 30, HeartbeatSeconds: 60, Confirm: 2, Recover: 2, ReannounceMin: 60, StateDir: "/var/lib/aiops-agent",
 		Thresholds: Thresholds{LoadPerCoreCrit: 3, MemAvailPctCrit: 5, DiskPctCrit: 95, IOPsiCrit: 50, DiskPath: "/"},
+		Security:   Security{SSHFailCrit: 30, SSHFailWindowS: 600, HoldMinutes: 120},
 	}
 }
 
@@ -119,6 +134,9 @@ func (c *Config) Validate() error {
 		if p.Port < 1 || p.Port > 65535 || p.Name == "" {
 			return errors.New("port check tidak valid")
 		}
+	}
+	if err := c.Security.validate(); err != nil {
+		return err
 	}
 	for _, l := range c.Logs {
 		if l.Path == "" || l.Pattern == "" || l.Name == "" {
