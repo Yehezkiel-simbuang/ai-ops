@@ -1,0 +1,20 @@
+# HTTPS di jaringan lokal dengan sertifikat Let's Encrypt asli lewat DNS-01: tidak ada port yang dibuka ke internet.
+# Butuh domain Anda, record A ke IP privat server ini, dan token API DNS (hanya izin edit DNS zona itu).
+{
+	# tanpa HTTP/ACME publik dan tanpa telemetri
+	auto_https disable_redirects
+	admin off
+}
+
+{$DOMAIN} {
+	tls {
+		dns {$DNS_PROVIDER} {env.DNS_API_TOKEN}
+		resolvers 1.1.1.1 8.8.8.8
+	}
+	encode zstd gzip
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+	}
+	reverse_proxy app:4317
+}

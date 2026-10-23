@@ -1,0 +1,67 @@
+{
+  "stack": "Laravel 10.0",
+  "kind": "laravel",
+  "envFile": ".env",
+  "evidence": {
+    "sanctum_routes": [
+      "routes/api.php"
+    ]
+  },
+  "sanctum": true,
+  "sanctumVersion": "3.3.3",
+  "redisClient": "predis",
+  "drivers": {
+    "db": "mysql",
+    "dbHost": "jarak-jauh",
+    "cache": "redis",
+    "session": "redis",
+    "queue": "redis",
+    "redisHost": "lokal"
+  },
+  "appDebug": true,
+  "appEnv": "local",
+  "configCached": false,
+  "routesCached": false,
+  "routes": {
+    "api": 17,
+    "web": 120,
+    "sanctumGuarded": true
+  },
+  "jobs": [
+    "SendInvoiceEmail",
+    "GenerateReport",
+    "SyncInventory",
+    "SendNotification",
+    "ImportCsv",
+    "ExportCsv",
+    "CleanupSessions",
+    "RebuildSearchIndex",
+    "ArchiveOldRecords"
+  ],
+  "queues": {
+    "default": 6,
+    "notifikasi": 3
+  },
+  "external": {
+    "payments.example.com": [
+      "app/Http/Controllers/Account/Api/AccountApi.php",
+      "app/Http/Controllers/Account/Api/AccountApi.php",
+      "app/Http/Controllers/Payout/Controller/Action.php"
+    ]
+  },
+  "heavyLoops": [
+    "app/Http/Controllers/Report/Controller/Data.php"
+  ],
+  "lockForUpdate": 64,
+  "apiControllers": [
+    "app/Http/Controllers/Support/Api/SupportApi.php",
+    "app/Http/Controllers/Account/Api/AccountApi.php",
+    "app/Http/Controllers/Invoice/Api/InvoiceApi.php"
+  ],
+  "snmp": false,
+  "schedule": {
+    "total": 13,
+    "everyMinute": 6
+  },
+  "retryAfter": 90
+}

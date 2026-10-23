@@ -1,0 +1,86 @@
+/* Lab arsitektur: panggung, kontrol, perbandingan. */
+.lab-grid { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1320px) { .lab-grid { grid-template-columns: minmax(0, 1fr) 340px; } .lab-side { position: sticky; top: 14px; max-height: calc(100vh - 28px); overflow-y: auto; padding-right: 2px; } }
+.lab-main { display: grid; gap: 16px; min-width: 0; }
+.lab-side { display: grid; gap: 14px; min-width: 0; align-content: start; }
+.lab-views { display: grid; gap: 12px; }
+.lab-views.split { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.lab-view { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); min-width: 0; overflow: hidden; }
+.lab-view > header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: .86rem; }
+.lab-view > header b { font-weight: 600; }
+
+.stage-wrap { overflow-x: auto; background: var(--panel-2); }
+svg.stage { display: block; width: 100%; min-width: 820px; height: auto; max-height: 520px; }
+.edge { fill: none; stroke: var(--line-strong); }
+.edge.live { stroke: var(--accent); stroke-dasharray: 6 7; animation: flow var(--dur, 1s) linear infinite; transition: stroke .3s; }
+.edge.live.warn { stroke: var(--warn); } .edge.live.bad { stroke: var(--bad); }
+@keyframes flow { to { stroke-dashoffset: -13; } }
+.edge-label { font: 10px var(--font-mono); fill: var(--muted); }
+.gbox { fill: var(--panel); stroke: var(--line-strong); stroke-width: 1.5; transition: stroke .3s; }
+.gnode.ok .gbox { stroke: var(--ok); } .gnode.warn .gbox { stroke: var(--warn); } .gnode.bad .gbox { stroke: var(--bad); stroke-width: 2.2; }
+.gicon { color: var(--muted); } .gnode.ok .gicon { color: var(--ok); } .gnode.warn .gicon { color: var(--warn); } .gnode.bad .gicon { color: var(--bad); }
+.glabel { font: 600 12.5px var(--font-ui); fill: var(--ink); }
+.gsub { font: 11px var(--font-mono); fill: var(--muted); }
+.gtrack { fill: var(--line); }
+.gfill { fill: var(--ok); transition: width .35s ease, fill .3s; }
+.gnode.warn .gfill { fill: var(--warn); } .gnode.bad .gfill { fill: var(--bad); }
+.gnew { font: 600 10px var(--font-ui); fill: var(--accent); }
+.gnode.new .gbox { stroke-dasharray: 5 3; }
+.gnode.new { animation: pop .5s ease-out; transform-box: fill-box; transform-origin: center; }
+@keyframes pop { from { opacity: 0; } to { opacity: 1; } }
+.gnode.hot .gbox { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { stroke-width: 4; } }
+@media (prefers-reduced-motion: reduce) { .edge.live, .gnode.hot .gbox, .gnode.new { animation: none; } .gfill { transition: none; } }
+
+.hud { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); border-top: 1px solid var(--line); }
+.hud > div { padding: 8px 12px; border-left: 1px solid var(--line); }
+.hud > div:first-child { border-left: 0; }
+.hud b { display: block; font: 500 1.05rem var(--font-mono); font-variant-numeric: tabular-nums; }
+.hud span { font-size: .72rem; color: var(--muted); }
+.playbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); }
+.playbar input[type=range] { flex: 1 1 200px; accent-color: var(--accent); padding: 0; }
+.diag { padding: 10px 12px; border-top: 1px solid var(--line); font-size: .86rem; display: flex; gap: 10px; }
+.diag.lv0 svg { color: var(--ok); } .diag.lv1 svg { color: var(--warn); } .diag.lv2 svg { color: var(--bad); }
+.diag p { color: var(--muted); font-size: .8rem; margin-top: 2px; }
+
+.timeline { display: block; width: 100%; height: 110px; }
+.timeline .grid { stroke: var(--line); stroke-width: 1; }
+.timeline .s-base { fill: none; stroke: var(--bad); stroke-width: 1.6; opacity: .8; vector-effect: non-scaling-stroke; }
+.timeline .s-exp { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.timeline .cursor { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.timeline text { font: 10px var(--font-mono); fill: var(--muted); }
+
+.verdict { border: 1px solid var(--line); border-left-width: 4px; border-radius: 5px; padding: 10px 14px; background: var(--panel); }
+.verdict.ok { border-left-color: var(--ok); } .verdict.warn { border-left-color: var(--warn); } .verdict.bad { border-left-color: var(--bad); } .verdict.mute { border-left-color: var(--line-strong); }
+.verdict b { display: block; font-size: .98rem; }
+.verdict p { color: var(--muted); font-size: .86rem; margin-top: 2px; }
+.delta.better { color: var(--ok); } .delta.worse { color: var(--bad); } .delta.same { color: var(--muted); }
+
+.card-comp { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.card-comp.on { border-color: var(--accent); }
+.card-comp > header { display: flex; align-items: center; gap: 9px; padding: 9px 11px; cursor: pointer; }
+.card-comp > header b { flex: 1 1 auto; font-size: .88rem; font-weight: 600; }
+.card-comp .body { padding: 0 11px 11px; display: grid; gap: 9px; }
+.card-comp .body p { font-size: .8rem; color: var(--muted); }
+.card-comp[aria-disabled="true"] { opacity: .6; }
+.param { display: grid; gap: 3px; font-size: .8rem; }
+.param .row2 { display: flex; align-items: center; gap: 8px; }
+.param input[type=range] { flex: 1 1 auto; accent-color: var(--accent); padding: 0; }
+.param output { font: 500 .8rem var(--font-mono); min-width: 52px; text-align: right; }
+.chip-x { display: inline-flex; align-items: center; gap: 6px; }
+.lab-note { font-size: .78rem; color: var(--muted); }
+
+.lab-side .tabs button { padding: 6px 8px; font-size: .82rem; }
+
+.rank-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.rank-col { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); min-width: 0; }
+.rank-col > h3 { padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: .86rem; }
+.rank { padding: 10px 12px; border-top: 1px solid var(--line); display: grid; gap: 4px; }
+.rank:first-of-type { border-top: 0; }
+.rankbar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.rankbar i { display: block; height: 100%; background: var(--accent); }
+.grank { fill: var(--accent); } .grank-t { font: 700 10px var(--font-ui); fill: #fff; }
+
+.gnode.st-down .gbox, .gnode.st-failover .gbox { stroke-dasharray: 4 3; fill: var(--panel-2); }
+.gnode.st-down .glabel, .gnode.st-down .gsub { fill: var(--bad); }
+.gnode.st-failover .gsub, .gnode.st-degraded .gsub, .gnode.st-warm .gsub { fill: var(--warn); font-weight: 600; }

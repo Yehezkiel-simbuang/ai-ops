@@ -1,0 +1,59 @@
+# ---------- Rahasia: JANGAN PERNAH di-commit ----------
+# Dibuat oleh `node scripts/init-secrets.mjs` (password DB, kunci enkripsi master, password admin, rahasia loadgen).
+secrets/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.crt
+*.csr
+
+# ---------- Data dan cadangan lokal ----------
+data/
+backups/
+*.sql.gz
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+
+# ---------- Hasil build dan dependensi ----------
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.vite/
+.vitest/
+.cache/
+# biner agen Go dan runner (dibuat saat build)
+agent/aiops-agent*
+loadgen/loadgen
+*.exe
+*.test
+*.out
+
+# ---------- Log dan sementara ----------
+*.log
+logs/
+npm-debug.log*
+.demo-home/
+.tmp-home/
+.scratch*
+*.tmp
+*.swp
+
+# ---------- Editor, OS, dan alat bantu ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.code-workspace
+.claude/

@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "name": "Contoh: toko online",
+  "stack": ["Contoh buatan tangan", "API + Postgres + SSD"],
+  "nodes": [
+    { "id": "shopper", "type": "client", "label": "Pembeli", "icon": "phone" },
+    { "id": "staff", "type": "client", "label": "Staf (laporan)", "icon": "monitor" },
+    { "id": "gateway", "type": "proxy", "label": "API Gateway", "timeoutS": 30 },
+    { "id": "api", "type": "pool", "label": "Server API", "workers": 24 },
+    { "id": "cache", "type": "cache", "label": "Cache" },
+    { "id": "pg", "type": "db", "label": "Postgres", "connections": 100, "flush": 1, "group": true, "hotKeys": 500, "disk": "ssd" },
+    { "id": "ssd", "type": "disk", "label": "SSD NVMe", "fsyncMs": 1.5, "bwMBs": 400, "amp": 1, "slog": false },
+    { "id": "payment", "type": "external", "label": "Gateway pembayaran" }
+  ],
+  "workloads": [
+    { "id": "browse", "label": "Telusuri produk", "client": "shopper", "pool": "api", "rate": 80, "cpuMs": 25, "color": "#2f6fd6",
+      "calls": [ { "node": "cache", "ms": 1 }, { "node": "pg", "read": 3 } ] },
+    { "id": "checkout", "label": "Checkout", "client": "shopper", "pool": "api", "rate": 4, "cpuMs": 60, "color": "#d9691a",
+      "calls": [ { "node": "pg", "read": 5 }, { "node": "payment", "ms": 700 }, { "node": "pg", "write": true, "kb": 8 } ] },
+    { "id": "report", "label": "Laporan penjualan (query berat)", "client": "staff", "pool": "api", "rate": 0.3, "cpuMs": 100, "color": "#118a8a",
+      "calls": [ { "node": "pg", "read": 4000 } ] }
+  ],
+  "faults": []
+}

@@ -1,0 +1,14 @@
+# HTTPS lokal dengan CA internal Caddy (tanpa domain publik). Root CA harus dipercaya klien:
+#   docker compose --profile lan-internal exec caddy-internal cat /data/caddy/pki/authorities/local/root.crt > aiops-root.crt
+# Agen: isi "ca_file" dengan berkas itu; browser: impor sebagai CA tepercaya.
+{
+	admin off
+	local_certs
+}
+
+{$DOMAIN} {
+	tls internal
+	encode zstd gzip
+	header -Server
+	reverse_proxy app:4317
+}

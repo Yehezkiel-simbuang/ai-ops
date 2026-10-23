@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "name": "Contoh: API sederhana (1 server + database)",
+  "stack": ["Contoh umum", "Node/Python/Go/Java apa pun", "Postgres di SSD"],
+  "nodes": [
+    { "id": "users", "type": "client", "label": "Pengguna", "icon": "phone" },
+    { "id": "lb", "type": "proxy", "label": "Reverse proxy", "timeoutS": 30 },
+    { "id": "app", "type": "pool", "label": "Aplikasi API", "workers": 40, "cores": 4 },
+    { "id": "cache", "type": "cache", "label": "Redis" },
+    { "id": "db", "type": "db", "label": "Database Postgres", "connections": 50, "onFull": "wait", "waitTimeoutS": 30, "flush": 1, "group": true, "hotKeys": 200, "disk": "ssd" },
+    { "id": "ssd", "type": "disk", "label": "SSD", "fsyncMs": 2, "bwMBs": 300, "amp": 1, "slog": false },
+    { "id": "mail", "type": "external", "label": "Layanan email / pembayaran" }
+  ],
+  "workloads": [
+    { "id": "read", "label": "Baca data", "client": "users", "pool": "app", "rate": 40, "cpuMs": 15, "color": "#4f7fb5", "calls": [ { "node": "cache", "ms": 1 }, { "node": "db", "read": 4 } ] },
+    { "id": "write", "label": "Tulis data", "client": "users", "pool": "app", "rate": 8, "cpuMs": 30, "color": "#b4541a", "calls": [ { "node": "db", "read": 3 }, { "node": "db", "write": true, "kb": 8 } ] },
+    { "id": "checkout", "label": "Checkout / bayar", "client": "users", "pool": "app", "rate": 2, "cpuMs": 40, "color": "#3d8f80", "calls": [ { "node": "db", "read": 4 }, { "node": "mail", "ms": 700 }, { "node": "db", "write": true, "kb": 8 } ] },
+    { "id": "report", "label": "Laporan berat", "client": "users", "pool": "app", "rate": 0.2, "cpuMs": 80, "color": "#8465b0", "calls": [ { "node": "db", "read": 2500 } ] }
+  ],
+  "faults": []
+}

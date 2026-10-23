@@ -1,0 +1,16 @@
+/* Konsep: lembar kerja teknisi. Kertas hangat, tinta grafit, satu aksen oranye bata. Tanpa bayangan, tanpa gradasi. */
+:root {
+  --bg: #f3f2ee; --panel: #faf9f6; --panel-2: #edece7; --ink: #1d1f23; --muted: #5f636b; --line: #d9d7cf; --line-strong: #bcb9ae;
+  --accent: #b4541a; --accent-soft: #f1e2d5; --ok: #2c7a55; --warn: #9c6b0c; --bad: #b23a31;
+  --c-in: #4f7fb5; --c-out: #b4541a; --code-bg: #121418; --code-ink: #e7e5e0;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141619; --panel: #1a1d21; --panel-2: #22262b; --ink: #e7e5e0; --muted: #9a9ea6; --line: #2e3238; --line-strong: #444950;
+    --accent: #e0955a; --accent-soft: #34271d; --ok: #5fb98a; --warn: #d9a441; --bad: #e2766c;
+    --c-in: #6f9bd1; --c-out: #d98e4a;
+    color-scheme: dark;
+  }
+}

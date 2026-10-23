@@ -1,0 +1,59 @@
+{
+  "_comment": "Nilai REKAAN untuk contoh, bukan hasil ukur siapa pun. Dipakai analyzer untuk menimpa tebakan default. Angka laju trafik (rate) selalu asumsi sampai ada metrik nyata.",
+  "source": "contoh-rekaan",
+  "nodes": {
+    "nginx": {
+      "timeoutS": 60
+    },
+    "fpm": {
+      "workers": 50,
+      "_evidence": "pm.max_children=50 (www.conf), request_terminate_timeout=60s"
+    },
+    "mysql": {
+      "connections": 151,
+      "flush": 1,
+      "hotKeys": 300,
+      "_evidence": "MySQL 8.0, max_connections=151 (bawaan), innodb_flush_log_at_trx_commit=1, fsync rata-rata sekitar 50 ms (nilai contoh)"
+    },
+    "session_db": {
+      "connections": 151,
+      "flush": 2,
+      "_evidence": "MariaDB terpisah setelah tuning: buffer pool 1,5 GB, flush_log=2"
+    },
+    "storage": {
+      "fsyncMs": 12,
+      "bwMBs": 100,
+      "amp": 8,
+      "slog": false,
+      "label": "Pool ZFS (HDD, tanpa SLOG)",
+      "_evidence": "contoh: disk_wait 12-19 ms, antrean tulis panjang saat stall, 2 mirror (4 HDD), tanpa SLOG"
+    }
+  },
+  "rates": {
+    "mobile_api": 60,
+    "mobile_login": 3,
+    "mobile_status": 12,
+    "mobile_pay": 0.5,
+    "admin_web": 1,
+    "admin_report": 0.4,
+    "usage_log": 40,
+    "queue_jobs": 2
+  },
+  "faults": [
+    {
+      "_nama": "Disk tersendat (skenario contoh)",
+      "node": "storage",
+      "type": "stall",
+      "every": 150,
+      "len": 75
+    },
+    {
+      "_nama": "Database sesi lambat saat disk macet",
+      "node": "session_db",
+      "type": "slow",
+      "every": 150,
+      "len": 75,
+      "mult": 40
+    }
+  ]
+}

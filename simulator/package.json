@@ -1,0 +1,11 @@
+{
+  "name": "aiopsagent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Analyzer, mesin simulasi, dan komponen eksperimen untuk lab arsitektur (JavaScript tanpa dependensi)",
+  "scripts": {
+    "recommend:contoh": "node tools/recommend-cli.js architectures/contoh-web-hdd.current.json --facts architectures/contoh-web-hdd.facts.json",
+    "benchmark:contoh": "node tools/benchmark.js architectures/contoh-web-hdd.current.json --faults insiden --detik 300",
+    "test": "node tools/test.js && node tools/test-lab.js"
+  }
+}

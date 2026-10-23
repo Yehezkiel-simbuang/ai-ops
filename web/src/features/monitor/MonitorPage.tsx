@@ -1,0 +1,95 @@
+// Monitor satu server, disusun menurut prioritas: vonis keseluruhan, masalah yang perlu ditangani, resource, lalu rincian yang dilipat.
+import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { q, useAction } from '@/api/queries';
+import type { MonitorView } from '@/api/types';
+import { LevelBadge, ServerStatusBadge } from '@/components/StatusBadges';
+import { VerdictBanner } from '@/components/VerdictBanner';
+import { Async } from '@/components/ui/Async';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Spark } from '@/components/ui/Charts';
+import { Fold } from '@/components/ui/Fold';
+import { Empty, Item, List, PageHead, Section } from '@/components/ui/Layout';
+import { IconBell, IconBulb, IconPulse, IconRefresh } from '@/components/icons';
+import { post, put } from '@/lib/api';
+import { ago, dateTime } from '@/lib/format';
+import { toast } from '@/lib/toast';
+import { ChecksPanel } from './ChecksPanel';
+import { isProblem, summarize } from './health';
+
+function MonitorBody({ id, d }: { id: number; d: MonitorView }) {
+  const s = d.server, refresh = [['servers', id, 'monitor'], ['overview'], ['servers']], sum = summarize(d);
+  const toggle = useAction((on: boolean) => put(`/api/servers/${id}`, { monitor_on: on }), { success: (_, on) => (on ? 'Monitoring aktif' : 'Monitoring mati'), invalidate: refresh });
+  const ack = useAction((alertId: number) => post(`/api/alerts/${alertId}/ack`), { invalidate: refresh });
+  const cores = d.latest.nproc?.value, checksBad = d.checks.filter(isProblem).length;
+
+  return (
+    <>
+      <VerdictBanner label="Kondisi server" verdict={sum.verdict} headline={sum.headline} detail={sum.detail}
+        facts={<>{d.checks.length > 0 && `${sum.counts.ok} normal${sum.counts.warn ? `, ${sum.counts.warn} peringatan` : ''}${sum.counts.crit ? `, ${sum.counts.crit} kritis` : ''}${sum.counts.off ? `, ${sum.counts.off} dimatikan` : ''} | `}terakhir terlihat {ago(s.last_seen)}{s.os_info ? ` | ${s.os_info}` : ''}</>}
+        aside={<label className="checkline"><input type="checkbox" checked={s.monitor_on} onChange={(e) => toggle.mutate(e.target.checked)} /><span>Pantau tiap {s.monitor_every} detik</span></label>} />
+
+      <Section title={sum.problems.length ? `Perlu ditangani (${sum.problems.length})` : 'Perlu ditangani'} icon={IconBell}>
+        {sum.problems.length ? (
+          <List>{sum.problems.map((p) => (
+            <Item key={p.id} top title={p.title} sub={[`${p.detail}${p.ts ? ` | ${ago(p.ts)}` : ''}`]}>
+              <LevelBadge level={p.level} />
+              {p.unconfirmed && <Badge tone="mute">belum dikonfirmasi</Badge>}
+              {p.alertId !== undefined && !p.acked && <Button onClick={() => ack.mutateAsync(p.alertId!)}>Tandai dilihat</Button>}
+              {p.acked && <Badge tone="mute">sudah dilihat</Badge>}
+            </Item>
+          ))}</List>
+        ) : <p className="lbl calm">Tidak ada yang perlu ditangani sekarang.</p>}
+      </Section>
+
+      <Section title="Resource server" icon={IconPulse}>
+        <div className="sparks">
+          <Spark label="Beban CPU (load 5 menit)" unit="" series={d.series.load5} warnAt={cores} format={(v) => v.toFixed(2)} />
+          <Spark label="Memori tersedia" unit="%" series={d.series.mem_avail_pct} format={(v) => v.toFixed(0)} />
+          <Spark label="Disk root terpakai" unit="%" series={d.series.disk_root_pct} warnAt={85} format={(v) => v.toFixed(0)} />
+          <Spark label="Tekanan I/O (PSI 10 dtk)" unit="%" series={d.series.io_psi10} warnAt={20} format={(v) => v.toFixed(1)} />
+        </div>
+      </Section>
+
+      <Fold title="Pemeriksaan layanan di dalam server" hint={d.checks.length ? `${d.checks.length} pemeriksaan${checksBad ? `, ${checksBad} bermasalah` : ', semua normal'}` : 'belum ada'} open={d.checks.length === 0}>
+        <ChecksPanel serverId={id} checks={d.checks} />
+      </Fold>
+      <Fold title="Riwayat peringatan" hint={sum.history.length ? `${sum.history.length} sudah selesai` : 'belum ada'}>
+        {sum.history.length
+          ? <List>{sum.history.slice(0, 20).map((a) => <Item key={a.id} title={a.title} sub={[`${a.detail} | ${ago(a.ts)}`]}><Badge tone="ok">selesai</Badge></Item>)}</List>
+          : <Empty>Belum ada peringatan yang selesai.</Empty>}
+      </Fold>
+      <Fold title="Laporan AI" hint={d.reports.length ? `terakhir ${ago(d.reports[0]!.ts)}` : 'belum ada'} open={d.reports.length > 0 && Date.now() - d.reports[0]!.ts < 30 * 60_000}>
+        {d.reports.length
+          ? <div className="reports">{d.reports.map((r) => <div key={r.ts}><div className="lbl">{dateTime(r.ts)}</div><div className="report">{r.text}</div></div>)}</div>
+          : <Empty>Belum ada laporan. Tekan "Analisis AI" setelah ada data metrik.</Empty>}
+        <p className="lbl" style={{ marginTop: 8 }}>Ringkasan ditulis AI dari 5 metrik dasar dan peringatan aktif 2 jam terakhir. Ini bantuan membaca, bukan sumber peringatan.</p>
+      </Fold>
+      <p className="lbl" style={{ marginTop: 14 }}><Link to="/standar">Batas peringatan diatur di Standar pemantauan</Link> dan berlaku untuk semua server.</p>
+    </>
+  );
+}
+
+export function MonitorPage() {
+  const servers = useQuery(q.servers()), params = useParams(), navigate = useNavigate();
+  const list = servers.data;
+  const id = Number(params.id) || list?.[0]?.id;
+  const view = useQuery({ ...q.monitor(id ?? 0), enabled: !!id });
+  const refresh = [['servers', id ?? 0, 'monitor'], ['overview'], ['servers']];
+  const check = useAction(() => post<{ ok: boolean }>(`/api/servers/${id}/check`), { invalidate: refresh, onSuccess: (r) => toast(r.ok ? 'Pemeriksaan selesai' : 'Server tidak terjangkau', !r.ok) });
+  const analyze = useAction(() => { toast('Menganalisis...'); return post(`/api/servers/${id}/analyze`); }, { success: 'Laporan dibuat', invalidate: refresh });
+
+  if (list && !list.length) return <><PageHead title="Monitor" icon={IconPulse} /><Empty>Belum ada server.</Empty></>;
+  return (
+    <>
+      <PageHead title="Monitor" icon={IconPulse}>
+        {list && id && <select aria-label="Pilih server" value={id} onChange={(e) => navigate(`/monitor/${e.target.value}`)}>{list.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
+        {view.data && <ServerStatusBadge status={view.data.server.last_status} />}
+        <Button icon={IconRefresh} onClick={() => check.mutateAsync()}>Periksa sekarang</Button>
+        <Button icon={IconBulb} title="Ringkasan kondisi server ditulis AI dari metrik dan peringatan terakhir" onClick={() => analyze.mutateAsync()}>Analisis AI</Button>
+      </PageHead>
+      {id && <Async query={view}>{(d) => <MonitorBody key={id} id={id} d={d} />}</Async>}
+    </>
+  );
+}

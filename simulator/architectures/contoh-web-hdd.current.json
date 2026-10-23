@@ -1,0 +1,317 @@
+{
+  "schema": 1,
+  "name": "Contoh: aplikasi web, database di disk lambat (saat ini)",
+  "stack": [
+    "Laravel 10.0",
+    "PHP ^8.0.2",
+    "mysql"
+  ],
+  "nodes": [
+    {
+      "id": "mobile",
+      "type": "client",
+      "label": "Aplikasi mobile",
+      "icon": "phone"
+    },
+    {
+      "id": "admin",
+      "type": "client",
+      "label": "Panel admin",
+      "icon": "monitor"
+    },
+    {
+      "id": "nginx",
+      "type": "proxy",
+      "label": "Nginx",
+      "timeoutS": 60
+    },
+    {
+      "id": "fpm",
+      "type": "pool",
+      "label": "PHP-FPM",
+      "workers": 50,
+      "assumed": [],
+      "evidence": "pm.max_children=50 (www.conf), request_terminate_timeout=60s"
+    },
+    {
+      "id": "redis",
+      "type": "cache",
+      "label": "Redis (3 fungsi)"
+    },
+    {
+      "id": "mysql",
+      "type": "db",
+      "label": "Database mysql (jarak jauh)",
+      "connections": 151,
+      "flush": 1,
+      "group": true,
+      "hotKeys": 300,
+      "disk": "storage",
+      "assumed": [],
+      "evidence": "MySQL 8.0, max_connections=151 (bawaan), innodb_flush_log_at_trx_commit=1, fsync rata-rata sekitar 50 ms (nilai contoh)"
+    },
+    {
+      "id": "session_db",
+      "type": "db",
+      "label": "Database sesi dan pencatatan",
+      "connections": 151,
+      "flush": 2,
+      "group": true,
+      "disk": "storage",
+      "assumed": [],
+      "evidence": "MariaDB terpisah setelah tuning: buffer pool 1,5 GB, flush_log=2"
+    },
+    {
+      "id": "storage",
+      "type": "disk",
+      "label": "Pool ZFS (HDD, tanpa SLOG)",
+      "fsyncMs": 12,
+      "bwMBs": 100,
+      "amp": 8,
+      "slog": false,
+      "assumed": [],
+      "evidence": "contoh: disk_wait 12-19 ms, antrean tulis panjang saat stall, 2 mirror (4 HDD), tanpa SLOG"
+    },
+    {
+      "id": "ext_payments_example_com",
+      "type": "external",
+      "label": "Gateway pembayaran",
+      "host": "payments.example.com"
+    },
+    {
+      "id": "devices",
+      "type": "client",
+      "label": "Perangkat jaringan (pengirim catatan)",
+      "icon": "router"
+    },
+    {
+      "id": "workers",
+      "type": "client",
+      "label": "Queue worker",
+      "icon": "gear"
+    }
+  ],
+  "workloads": [
+    {
+      "id": "mobile_api",
+      "label": "API mobile",
+      "client": "mobile",
+      "pool": "fpm",
+      "rate": 60,
+      "rateAssumed": true,
+      "cpuMs": 40,
+      "color": "#2f6fd6",
+      "calls": [
+        {
+          "node": "redis",
+          "ms": 1
+        },
+        {
+          "node": "mysql",
+          "read": 4,
+          "write": true,
+          "hot": true,
+          "kb": 4,
+          "tag": "sanctum_last_used"
+        }
+      ],
+      "evidence": [
+        "laravel/sanctum 3.3.3 menulis last_used_at di setiap request API (vendor/laravel/sanctum Guard)",
+        "routes/api.php"
+      ]
+    },
+    {
+      "id": "mobile_login",
+      "label": "Login mobile (bcrypt + tulis)",
+      "client": "mobile",
+      "pool": "fpm",
+      "rate": 3,
+      "rateAssumed": true,
+      "cpuMs": 120,
+      "color": "#d9691a",
+      "calls": [
+        {
+          "node": "mysql",
+          "read": 4,
+          "write": true,
+          "kb": 4
+        },
+        {
+          "node": "mysql",
+          "write": true,
+          "kb": 4
+        }
+      ],
+      "evidence": [
+        "routes/api.php: POST login"
+      ]
+    },
+    {
+      "id": "mobile_status",
+      "label": "Status akun di aplikasi mobile",
+      "client": "mobile",
+      "pool": "fpm",
+      "rate": 12,
+      "rateAssumed": true,
+      "cpuMs": 60,
+      "color": "#118a8a",
+      "calls": [
+        {
+          "node": "redis",
+          "ms": 1
+        },
+        {
+          "node": "mysql",
+          "read": 6
+        },
+        {
+          "node": "session_db",
+          "read": 40,
+          "tag": "status_check"
+        }
+      ],
+      "evidence": [
+        "app/Http/Controllers/Account/Api/AccountApi.php"
+      ]
+    },
+    {
+      "id": "mobile_ext_payments_example_com",
+      "label": "Pembayaran lewat gateway",
+      "client": "mobile",
+      "pool": "fpm",
+      "rate": 0.5,
+      "rateAssumed": true,
+      "cpuMs": 80,
+      "color": "#8a4fd0",
+      "calls": [
+        {
+          "node": "mysql",
+          "read": 5
+        },
+        {
+          "node": "ext_payments_example_com",
+          "ms": 900
+        },
+        {
+          "node": "mysql",
+          "write": true,
+          "kb": 8
+        }
+      ],
+      "evidence": [
+        "app/Http/Controllers/Account/Api/AccountApi.php",
+        "app/Http/Controllers/Account/Api/AccountApi.php"
+      ]
+    },
+    {
+      "id": "admin_web",
+      "label": "Panel admin (halaman biasa)",
+      "client": "admin",
+      "pool": "fpm",
+      "rate": 1,
+      "rateAssumed": true,
+      "cpuMs": 80,
+      "color": "#c2410c",
+      "calls": [
+        {
+          "node": "redis",
+          "ms": 1
+        },
+        {
+          "node": "mysql",
+          "read": 20
+        }
+      ],
+      "evidence": [
+        "routes/web.php (ratusan rute)"
+      ]
+    },
+    {
+      "id": "admin_report",
+      "label": "Laporan admin berat (loop query)",
+      "client": "admin",
+      "pool": "fpm",
+      "rate": 0.4,
+      "rateAssumed": true,
+      "cpuMs": 200,
+      "color": "#0f766e",
+      "calls": [
+        {
+          "node": "mysql",
+          "read": 30
+        },
+        {
+          "node": "session_db",
+          "read": 8000,
+          "tag": "report_loop"
+        }
+      ],
+      "evidence": [
+        "app/Http/Controllers/Report/Controller/Data.php"
+      ]
+    },
+    {
+      "id": "usage_log",
+      "label": "Pencatatan pemakaian (tulis)",
+      "client": "devices",
+      "async": true,
+      "rate": 40,
+      "rateAssumed": true,
+      "color": "#a21caf",
+      "calls": [
+        {
+          "node": "session_db",
+          "write": true,
+          "kb": 4
+        }
+      ],
+      "evidence": [
+        "app/Http/Services/UsageLogger"
+      ]
+    },
+    {
+      "id": "queue_jobs",
+      "label": "Antrean (2 queue, 9 job)",
+      "client": "workers",
+      "async": true,
+      "rate": 2,
+      "rateAssumed": true,
+      "color": "#4d7c0f",
+      "calls": [
+        {
+          "node": "mysql",
+          "write": true,
+          "kb": 16
+        }
+      ],
+      "evidence": [
+        "app/Jobs (9 job)",
+        "queue: default, notifikasi"
+      ]
+    }
+  ],
+  "faults": [],
+  "observedFaults": [
+    {
+      "node": "storage",
+      "type": "stall",
+      "every": 150,
+      "len": 75,
+      "name": "Disk tersendat (skenario contoh)"
+    },
+    {
+      "node": "session_db",
+      "type": "slow",
+      "every": 150,
+      "len": 75,
+      "mult": 40,
+      "name": "Database sesi lambat saat disk macet"
+    }
+  ],
+  "observedSource": "contoh-rekaan",
+  "meta": {
+    "analyzedAt": "2026-10-19",
+    "root": "aplikasi-web",
+    "kind": "laravel"
+  }
+}

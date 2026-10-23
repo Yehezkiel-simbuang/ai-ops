@@ -1,0 +1,157 @@
+# AI Ops: aplikasi + PostgreSQL. Rahasia lewat berkas di ./secrets (buat dengan: node scripts/init-secrets.mjs).
+name: aiops
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aiops
+      POSTGRES_USER: aiops
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    command: ["postgres", "-c", "max_connections=50", "-c", "shared_buffers=128MB", "-c", "log_min_duration_statement=500", "-c", "idle_in_transaction_session_timeout=60000"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [backend]            # jaringan internal: database tidak punya akses internet dan tidak dipublikasikan
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiops -d aiops"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    logging: *logging
+    stop_grace_period: 30s
+
+  app:
+    build: .
+    image: aiops-server:local
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      MASTER_KEY_FILE: /run/secrets/master_key
+      ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}      # setel true bila diakses lewat HTTPS (reverse proxy)
+      TRUST_PROXY: ${TRUST_PROXY:-false}          # true bila di belakang reverse proxy tepercaya
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      PROJECTS_ROOT: ${PROJECTS_ROOT:-}
+      PUBLIC_URL: ${PUBLIC_URL:-}                 # URL aplikasi yang bisa dijangkau agen (untuk panduan pemasangan)
+      TZ: ${TZ:-Asia/Jakarta}                      # zona waktu untuk ringkasan pemeliharaan harian
+      LOADGEN_SECRET_FILE: /run/secrets/loadgen_secret      # rahasia bersama runner uji beban
+      LOADTEST_ALLOWED_HOSTS: ${LOADTEST_ALLOWED_HOSTS:-}   # host non-privat yang boleh diuji (mis. staging.contoh.com); kosong = hanya jaringan lokal
+    secrets: [database_url, master_key, admin_password, loadgen_secret]
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${PORT:-4317}:4317"
+    volumes:
+      - appdata:/data
+      # opsional, untuk rencana dari folder proyek: setel PROJECTS_DIR dan PROJECTS_ROOT=/projects di .env
+      - ${PROJECTS_DIR:-./.empty}:/projects:ro
+    networks: [backend, default]  # backend: ke database; default: keluar ke internet (API model, Telegram) dan SSH ke server Anda
+    read_only: true
+    tmpfs: ["/tmp:size=16m,mode=1777,noexec,nosuid"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 512m
+    logging: *logging
+    stop_grace_period: 30s
+
+  # Pembangkit beban untuk fitur Uji beban (profil loadtest): k6 di kontainer terpisah dengan batas CPU/memori, supaya tidak berebut sumber daya
+  # dengan aplikasi. Hanya mengambil uji yang SUDAH Anda setujui di UI; tidak membuka port. Jalankan: docker compose --profile loadtest up -d --build
+  loadgen:
+    profiles: [loadtest]
+    build: { context: ., dockerfile: loadgen/Dockerfile }
+    image: aiops-loadgen:local
+    restart: unless-stopped
+    depends_on:
+      app: { condition: service_healthy }
+    environment:
+      LOADGEN_SERVER: http://app:4317
+      LOADGEN_SECRET_FILE: /run/secrets/loadgen_secret
+    secrets: [loadgen_secret]
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    cpus: ${LOADGEN_CPUS:-1}
+    mem_limit: 512m
+    pids_limit: 512
+    logging: *logging
+
+  # Aplikasi contoh sebagai target uji (profil demo): API kecil dengan pool database terbatas yang sengaja bisa jenuh. Hanya untuk mencoba fitur Uji beban.
+  demo-api:
+    profiles: [demo]
+    image: node:24-alpine
+    restart: unless-stopped
+    command: ["node", "/app/server.mjs"]
+    volumes: ["./demo:/app:ro"]
+    environment: { DB_POOL: "4", PORT: "8080" }
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    cpus: 1
+    mem_limit: 128m
+    logging: *logging
+
+  # HTTPS di jaringan lokal (tanpa membuka port ke internet). Pilih satu profil:
+  #   lan           : domain Anda + sertifikat Let's Encrypt via DNS-01 (dipercaya semua perangkat). docker compose --profile lan up -d --build
+  #   lan-internal  : CA internal Caddy (tanpa domain); root CA harus dipasang di klien.   docker compose --profile lan-internal up -d
+  # BIND_ADDR = IP LAN server ini (mis. 192.168.1.20); HTTPS_PORT bawaan 443.
+  caddy:
+    profiles: [lan]
+    build:
+      context: ./caddy
+      args: { DNS_PROVIDER: "${DNS_PROVIDER:-cloudflare}" }
+    image: aiops-caddy:local
+    restart: unless-stopped
+    depends_on: [app]
+    ports: ["${BIND_ADDR:-127.0.0.1}:${HTTPS_PORT:-443}:443"]
+    environment:
+      DOMAIN: ${DOMAIN:-}
+      DNS_PROVIDER: ${DNS_PROVIDER:-cloudflare}
+      DNS_API_TOKEN: ${DNS_API_TOKEN:-}
+    volumes: ["./caddy/Caddyfile.lan:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+  caddy-internal:
+    profiles: [lan-internal]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports: ["${BIND_ADDR:-127.0.0.1}:${HTTPS_PORT:-443}:443"]
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    volumes: ["./caddy/Caddyfile.internal:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+networks:
+  backend:
+    internal: true
+
+volumes:
+  pgdata:
+  appdata:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  db_password: { file: ./secrets/db_password.txt }
+  database_url: { file: ./secrets/database_url.txt }
+  master_key: { file: ./secrets/master_key.txt }
+  admin_password: { file: ./secrets/admin_password.txt }
+  loadgen_secret: { file: ./secrets/loadgen_secret.txt }
