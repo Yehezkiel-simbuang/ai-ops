@@ -10,7 +10,7 @@ import * as Vault from '../../vault.js';
 import { handle } from '../handle.js';
 
 async function overview() {
-  const servers = (await Servers.list()).map((s) => ({ id: s.id, name: s.name, host: s.host, status: s.last_status, open_alerts: s.open_alerts, monitor_on: s.monitor_on, last_seen: s.last_seen }));
+  const servers = (await Servers.list()).map((s) => ({ id: s.id, name: s.name, host: s.host, status: s.last_status, open_alerts: s.open_alerts, last_seen: s.last_seen }));
   const pending = await db().query("SELECT c.id, c.run_id, c.command, c.purpose, c.reason, r.name AS run_name FROM commands c JOIN runs r ON r.id=c.run_id WHERE c.status='pending_approval' ORDER BY c.id");
   const incidents = await Incidents.listIncidents('open');
   const recsWaiting = (await db().one<{ c: number }>("SELECT COUNT(*)::int AS c FROM recommendations WHERE status='proposed' AND incident_id IN (SELECT id FROM incidents WHERE status='open')"))!.c;

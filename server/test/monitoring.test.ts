@@ -48,7 +48,7 @@ beforeAll(async () => {
   });
   await new Promise<void>((r) => smtp.listen(0, '127.0.0.1', () => r())); smtpPort = (smtp.address() as AddressInfo).port;
   h = await harness(); await login(h);
-  sid = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-uji', host: '10.9.9.9', username: 'ops', use_sudo: true, monitor_on: false })).json.id;
+  sid = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-uji', host: '10.9.9.9', username: 'ops', use_sudo: true })).json.id;
   Servers.setExec(fakeExec() as never);
 });
 afterAll(async () => { await Monitor.stop(); recv.close(); smtp.close(); await h.close(); });

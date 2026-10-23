@@ -15,15 +15,16 @@ import { Empty, Hint, PageHead } from '@/components/ui/Layout';
 import { Modal } from '@/components/ui/Modal';
 import { IconBolt, IconBook, IconCheck, IconClose, IconFolder, IconKey, IconPlus, IconRefresh, IconServer, IconTrash, IconWrench } from '@/components/icons';
 import { del, post, put } from '@/lib/api';
+import { ago } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { installCommand, installHelp } from './pubkey';
 
 const EMPTY = {
-  name: '', host: '', port: 22, username: '', key_path: '', ssh_key: '', services: '', notes: '', use_sudo: false, playground: false, monitor_on: true, monitor_every: 60, exec_via: 'auto' as ExecVia
+  name: '', host: '', port: 22, username: '', key_path: '', ssh_key: '', services: '', notes: '', use_sudo: false, playground: false, exec_via: 'auto' as ExecVia
 };
 const EXEC_OPTIONS: Array<[ExecVia, string]> = [['auto', 'Otomatis (SSH bila ada kunci, jika tidak lewat agen)'], ['ssh', 'Selalu SSH'], ['agent', 'Selalu lewat agen di server']];
 
-const fromServer = (s: Server) => ({ ...EMPTY, name: s.name, host: s.host, port: s.port, username: s.username, key_path: s.key_path, services: s.services, notes: s.notes, use_sudo: s.use_sudo, playground: s.playground, monitor_on: s.monitor_on, monitor_every: s.monitor_every, exec_via: s.exec_via });
+const fromServer = (s: Server) => ({ ...EMPTY, name: s.name, host: s.host, port: s.port, username: s.username, key_path: s.key_path, services: s.services, notes: s.notes, use_sudo: s.use_sudo, playground: s.playground, exec_via: s.exec_via });
 
 function ServerForm({ editing, onDone }: { editing: Server | null; onDone: () => void }) {
   const { values, bind, bindCheck, reset, set } = useForm(editing ? fromServer(editing) : EMPTY);
@@ -36,7 +37,7 @@ function ServerForm({ editing, onDone }: { editing: Server | null; onDone: () =>
   };
   const save = useAction(
     async () => {
-      const body = { ...values, port: Number(values.port), monitor_every: Number(values.monitor_every), ssh_key: generate ? undefined : String(values.ssh_key).trim() || undefined, ...(generate ? { generate_key: true } : {}) } as unknown as ServerInput;
+      const body = { ...values, port: Number(values.port), ssh_key: generate ? undefined : String(values.ssh_key).trim() || undefined, ...(generate ? { generate_key: true } : {}) } as unknown as ServerInput;
       return editing ? put(`/api/servers/${editing.id}`, body) : post('/api/servers', body);
     },
     {
@@ -86,10 +87,6 @@ function ServerForm({ editing, onDone }: { editing: Server | null; onDone: () =>
       <Field label="Layanan yang dipantau (pisah koma)"><input className="mono" placeholder="mysql,nginx,php8.2-fpm" {...bind('services')} /></Field>
       <label className="checkline"><input type="checkbox" {...bindCheck('use_sudo')} /><span>Pengguna ini punya sudo tanpa password (agen boleh memakai "sudo -n")</span></label>
       <label className="checkline"><input type="checkbox" {...bindCheck('playground')} /><span><b>Server playground</b>: khusus uji. Susunan Docker Compose boleh dipasang dan dicopot di sini (halaman Playground). Jangan centang untuk server produksi.</span></label>
-      <div className="cols tight" style={{ alignItems: 'end' }}>
-        <label className="checkline"><input type="checkbox" {...bindCheck('monitor_on')} /><span>Aktifkan monitoring berkala</span></label>
-        <Field label="Interval (detik)"><input type="number" min={15} {...bind('monitor_every')} /></Field>
-      </div>
       <Field label="Jalur eksekusi perbaikan" hint="Perbaikan yang Anda setujui dijalankan lewat jalur ini.">
         <select {...bind('exec_via')}>{EXEC_OPTIONS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}</select>
       </Field>
@@ -141,7 +138,7 @@ export function ServersPage() {
   const close = () => setDialog(null), needle = search.trim().toLowerCase();
   const columns = (onEdit: (s: Server) => void): Array<Column<Server>> => [
     { id: 'name', header: 'Server', sort: (s) => s.name, cell: (s) => <><b>{s.name}</b> {s.playground && <Badge tone="acc">playground</Badge>}<div className="lbl mono">{s.username}@{s.host}:{s.port}</div></> },
-    { id: 'status', header: 'Status', sort: (s) => STATUS_RANK[s.last_status] ?? 2, cell: (s) => <><ServerStatusBadge status={s.last_status} /><div className="lbl">{s.monitor_on ? `dipantau tiap ${s.monitor_every} dtk` : 'monitoring mati'}</div></> },
+    { id: 'status', header: 'Status', sort: (s) => STATUS_RANK[s.last_status] ?? 2, cell: (s) => <><ServerStatusBadge status={s.last_status} /><div className="lbl">{s.last_seen ? `terakhir terlihat ${ago(s.last_seen)}` : 'belum pernah terlihat'}</div></> },
     { id: 'os', header: 'Sistem', sort: (s) => s.os_info, cell: (s) => <span className="lbl">{s.os_info || '-'}</span> },
     { id: 'key', header: 'Akses', sort: (s) => (s.has_ssh_key ? 'kunci tersimpan' : s.key_path || 'tanpa kunci'), cell: (s) => <span className="lbl">{s.has_ssh_key ? 'kunci tersimpan' : s.key_path ? `kunci: ${s.key_path}` : 'tanpa kunci (ssh bawaan)'}</span> },
     { id: 'act', header: 'Aksi', cell: (s) => <ServerActions s={s} onEdit={onEdit} /> }

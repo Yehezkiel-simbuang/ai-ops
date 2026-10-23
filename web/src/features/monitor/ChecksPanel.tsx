@@ -182,7 +182,7 @@ export function ChecksPanel({ serverId, checks }: { serverId: number; checks: Ch
         <Button icon={IconEye} onClick={discover}>Deteksi paket</Button>
         <Button icon={IconPlus} onClick={() => setPanel({ kind: 'add' })}>Tambah pemeriksaan</Button>
       </div>
-      <p className="lbl" style={{ marginBottom: 10 }}>Satu perintah baca-saja lewat SSH per pemeriksaan. Peringatan baru muncul setelah gagal berturut-turut. Kelompok yang bermasalah terbuka otomatis.</p>
+      <p className="lbl" style={{ marginBottom: 10 }}>Satu perintah baca-saja lewat SSH per pemeriksaan, dijalankan saat Anda menekan Periksa sekarang (tidak ada pemeriksaan otomatis berkala; untuk pemantauan terus-menerus pakai agen). Kelompok yang bermasalah terbuka otomatis.</p>
       <Modal open={panel !== null} onClose={close}>
         {meta && panel?.kind === 'discover' && <DiscoverPanel serverId={serverId} meta={meta} found={panel.found} onClose={close} />}
         {meta && panel?.kind === 'add' && <AddCheckPanel serverId={serverId} meta={meta} onClose={close} />}

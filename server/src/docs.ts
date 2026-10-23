@@ -80,7 +80,7 @@ export async function inventory(f: InventoryQuery = {}) {
       OR EXISTS (SELECT 1 FROM credentials c WHERE c.server_id=s.id AND (c.username ILIKE $${n} OR c.label ILIKE $${n})))`);
   }
   const now = Date.now();
-  return db().query(`SELECT s.id, s.name, s.host, s.port, s.username, s.purpose, s.environment, s.tags, s.location, s.owner, s.os_info, s.last_status, s.monitor_on, s.doc_updated, s.facts_at,
+  return db().query(`SELECT s.id, s.name, s.host, s.port, s.username, s.purpose, s.environment, s.tags, s.location, s.owner, s.os_info, s.last_status, s.doc_updated, s.facts_at,
       (SELECT address FROM server_addresses a WHERE a.server_id=s.id ORDER BY is_primary DESC, id LIMIT 1) AS primary_address,
       (SELECT COUNT(*)::int FROM credentials c WHERE c.server_id=s.id) AS credentials,
       (SELECT COUNT(*)::int FROM credentials c WHERE c.server_id=s.id AND c.rotate_every_days IS NOT NULL AND c.rotated_at + c.rotate_every_days::bigint * 86400000 < ${now}) AS rotation_due,

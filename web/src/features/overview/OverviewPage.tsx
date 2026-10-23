@@ -75,7 +75,7 @@ function OverviewBody({ o }: { o: Overview }) {
       <Section title="Server" icon={IconServer}>
         {servers.length ? (
           <List>{servers.map((s) => (
-            <Item key={s.id} to={`/monitor/${s.id}`} title={s.name} sub={[s.host + (s.monitor_on ? ` | dipantau, cek ${ago(s.last_seen)}` : ' | monitoring mati')]}>
+            <Item key={s.id} to={`/monitor/${s.id}`} title={s.name} sub={[`${s.host} | ${s.last_seen ? `terakhir terlihat ${ago(s.last_seen)}` : 'belum pernah terlihat'}`]}>
               {s.open_alerts > 0 && <Badge tone="bad">{s.open_alerts} peringatan</Badge>}
               <ServerStatusBadge status={s.status} />
             </Item>

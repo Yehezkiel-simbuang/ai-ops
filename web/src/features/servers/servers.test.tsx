@@ -42,7 +42,7 @@ describe('ServersPage: bantuan', () => {
 });
 
 const PEM = '-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----';
-const server = (over = {}) => ({ id: 3, name: 'srv-a', host: '10.0.0.9', port: 22, username: 'aiops', key_path: '', has_ssh_key: true, ssh_pub: '', use_sudo: false, services: '', notes: '', monitor_on: true, monitor_every: 60, exec_via: 'auto', last_status: 'ok', os_info: '', open_alerts: 0, ...over });
+const server = (over = {}) => ({ id: 3, name: 'srv-a', host: '10.0.0.9', port: 22, username: 'aiops', key_path: '', has_ssh_key: true, ssh_pub: '', use_sudo: false, services: '', notes: '',  exec_via: 'auto', last_status: 'ok', os_info: '', open_alerts: 0, ...over });
 
 describe('ServersPage: memasukkan kunci', () => {
   const fill = async () => {
@@ -156,5 +156,15 @@ describe('ServersPage: tabel', () => {
     mockApi({ 'GET /api/servers': { body: Array.from({ length: 7 }, (_, i) => server({ id: i + 1, name: `srv-${i + 1}`, host: `10.0.0.${i + 1}` })) } });
     renderWithProviders(<ServersPage />);
     await userEvent.type(await screen.findByLabelText('Cari server'), 'srv-3'); expect(rows()).toHaveLength(1); expect(rows()[0]).toHaveTextContent('srv-3');
+  });
+});
+
+describe('ServersPage: tanpa pemantauan berkala', () => {
+  it('formulir tidak punya kotak atau interval pemantauan berkala; kolom Status menyebut kapan terakhir terlihat, bukan interval', async () => {
+    mockApi({ 'GET /api/servers': { body: [server({ last_seen: Date.now() - 120_000 }), server({ id: 4, name: 'srv-b', last_seen: null })] } });
+    renderWithProviders(<ServersPage />);
+    expect(await screen.findByText(/terakhir terlihat 2 mnt lalu/)).toBeInTheDocument(); expect(screen.getByText('belum pernah terlihat')).toBeInTheDocument(); expect(screen.queryByText(/dipantau tiap|monitoring mati/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Tambah server' }));
+    expect(await screen.findByPlaceholderText('srv-database')).toBeInTheDocument(); expect(screen.queryByText(/Aktifkan monitoring berkala/)).not.toBeInTheDocument(); expect(screen.queryByText('Interval (detik)')).not.toBeInTheDocument();
   });
 });

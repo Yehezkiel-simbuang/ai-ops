@@ -8,7 +8,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 const NOW = Date.now();
 type S = Overview['servers'][number];
-const srv = (id: number, over: Partial<S> = {}): S => ({ id, name: `srv-${id}`, host: `10.0.0.${id}`, monitor_on: true, last_seen: NOW, open_alerts: 0, status: 'ok', ...over });
+const srv = (id: number, over: Partial<S> = {}): S => ({ id, name: `srv-${id}`, host: `10.0.0.${id}`, last_seen: NOW, open_alerts: 0, status: 'ok', ...over });
 const alert = (id: number, over: Partial<Alert> = {}): Alert => ({ id, title: `alert-${id}`, detail: 'rinci', level: 'major', ts: NOW, resolved: false, acked: false, server_name: 'srv-1', ...over });
 const overview = (over: Partial<Overview> = {}): Overview => ({
   servers: [srv(1)], pending: [], incidents: [], recsWaiting: 0, maintenance: { overdue: 0, soon: 0 }, rotationDue: 0, runs: [], usage: { input: 10, output: 5, calls: 1, cost: 0, costKnown: true },

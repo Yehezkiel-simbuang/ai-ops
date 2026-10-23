@@ -188,10 +188,9 @@ export async function runChecks(s: Servers.ServerRow): Promise<{ created: Cond[]
   out.created = await syncAlerts(s.id, conds, 'service'); return out;
 }
 
-// ---------- penjadwal (satu pemimpin saja lewat kunci advisory)
+// ---------- penjadwal (satu pemimpin saja lewat kunci advisory): pekerjaan di dalam aplikasi saja (pengingat, ringkasan, pengawas agen, cek HTTP), tanpa menghubungi server
 const LEADER_KEY = 727_002;
 let timer: NodeJS.Timeout | null = null, leader: pg.Client | null = null, lastPurge = 0, ticking = false;
-const busy = new Set<number>(), mark = new Map<number, number>();
 
 async function becomeLeader(): Promise<boolean> {
   if (leader) return true;
@@ -207,13 +206,7 @@ async function tick(): Promise<void> {
   if (ticking) return; ticking = true;
   try {
     if (!(await becomeLeader())) return;
-    const now = Date.now();
-    for (const s of await db().query<Servers.ServerRow>('SELECT * FROM servers WHERE monitor_on')) {
-      const last = await db().one<{ ts: number | null }>('SELECT MAX(ts) AS ts FROM metrics WHERE server_id=$1 AND name=$2', [s.id, 'load5']), ref = Math.max(last?.ts ?? 0, mark.get(s.id) ?? 0);
-      if (busy.has(s.id) || now - ref < s.monitor_every * 1000 - 500) continue;
-      busy.add(s.id); mark.set(s.id, now);
-      void check(s.id).catch((e) => log().warn({ err: (e as Error).message, server: s.name }, 'pemeriksaan gagal')).finally(() => busy.delete(s.id));
-    }
+    const now = Date.now();   // tidak ada pengambilan data berkala ke server; kondisi datang dari agen dan dari pemeriksaan manual
     await Notify.reminders(); await Notify.releaseDeferred();
     for (const h of hooks) { try { await h(); } catch (e) { log().warn({ err: (e as Error).message }, 'hook penjadwal gagal'); } }
     if (now - lastPurge > 6 * 3600e3) { lastPurge = now; await maintenance(now); }

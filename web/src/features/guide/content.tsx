@@ -179,7 +179,7 @@ export const SECTIONS: GuideSection[] = [
     id: 'agen', title: 'Pasang agen di server (opsional)',
     body: (
       <>
-        <p>Agen adalah program kecil di server yang menilai kondisi di server sendiri dan hanya melapor saat ada yang perlu Anda ketahui (menurut tingkat Critical, Major, Minor, atau Info), lengkap dengan buktinya. Beban pemantauan tidak menumpuk di aplikasi. Batas yang dipakai agen diambil dari halaman <b>Standar</b>, dan yang mati atau belum terhubung terlihat di panel <b>Armada agen</b> di halaman Server. Tanpa agen, aplikasi tetap memantau lewat SSH secara berkala.</p>
+        <p>Agen adalah program kecil di server yang menilai kondisi di server sendiri dan hanya melapor saat ada yang perlu Anda ketahui (menurut tingkat Critical, Major, Minor, atau Info), lengkap dengan buktinya. Beban pemantauan tidak menumpuk di aplikasi. Batas yang dipakai agen diambil dari halaman <b>Standar</b>, dan yang mati atau belum terhubung terlihat di panel <b>Armada agen</b> di halaman Server. Aplikasi tidak lagi menarik data dari server secara berkala: kondisi datang dari agen, dan pemeriksaan lewat SSH hanya berjalan saat Anda menekan <b>Periksa sekarang</b>. SSH tetap dipakai untuk setup dan menjalankan perbaikan yang Anda setujui.</p>
         <Hint icon={IconAlert}><span><b>Syarat penting:</b> agen berjalan di server Anda lalu menghubungi aplikasi lewat <b>HTTPS</b>. Agen menolak alamat <code>http://</code>, dan alamat <code>localhost</code> tidak terjangkau dari server lain. Jadi aplikasi harus punya alamat HTTPS yang bisa dibuka dari server tersebut.</span></Hint>
         <p>Dua jalur komunikasi berbeda arah. SSH dimulai oleh AI Ops, laporan agen dimulai oleh agen:</p>
         <AgentFlow />

@@ -31,7 +31,7 @@ Buka **http://localhost:4317** dan masuk dengan pengguna `admin`, password `1234
 
 1. **Tambah server.** Buka menu **Server**, lalu **Tambah server**. Autentikasi memakai **kunci SSH** (login dengan password tidak didukung). Pilih "Buat kunci otomatis", lalu pasang kunci publik yang ditampilkan di server Anda. Halaman **Panduan** menjelaskan langkahnya dengan gambar.
 2. **Hubungkan model AI.** Di **Pengaturan**, tambahkan penyedia (Anthropic, OpenAI-kompatibel, atau Gemini) dan pilih model untuk peran Setup dan Monitoring.
-3. **Pantau.** Buka **Monitor**, pilih server, lalu **Layanan di server** atau **Deteksi paket** untuk memilih apa yang dipantau. Batas peringatan diatur di **Standar**.
+3. **Pantau.** Pasang **agen** di server (menu Server, ikon Agen) supaya insiden dilaporkan sendiri lengkap dengan buktinya. Aplikasi tidak menarik data dari server secara berkala; pemeriksaan lewat SSH hanya berjalan saat Anda menekan **Periksa sekarang** di halaman Monitor. Batas tiap tingkat diatur di **Standar**.
 4. **Minta agen bekerja.** Buka **Setup**, tulis tujuannya, lalu setujui langkah demi langkah di halaman proses.
 
 Halaman **Ringkasan** menampilkan kondisi seluruh server, dan yang butuh tindakan Anda ada di bagian paling atas.

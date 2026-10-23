@@ -14,7 +14,7 @@ const deploy = (over: Partial<PlaygroundDeploy> = {}): PlaygroundDeploy => ({
   id: 7, server_id: 1, server_name: 'uji-pg', server_host: '10.1.1.1', name: 'web + redis', compose: 'services: {}', health_path: '/', target_port: 0, status: 'draft', target: '', detail: '', log: '',
   created: Date.now(), updated: Date.now(), deployed: null, analysis: analysis(), ...over
 });
-const server = (over = {}) => ({ id: 1, name: 'uji-pg', host: '10.1.1.1', port: 22, username: 'aiops', key_path: '', has_ssh_key: true, ssh_pub: '', playground: true, use_sudo: false, services: '', notes: '', monitor_on: false, monitor_every: 60, exec_via: 'auto', last_status: 'ok', os_info: '', last_seen: null, open_alerts: 0, ...over });
+const server = (over = {}) => ({ id: 1, name: 'uji-pg', host: '10.1.1.1', port: 22, username: 'aiops', key_path: '', has_ssh_key: true, ssh_pub: '', playground: true, use_sudo: false, services: '', notes: '',  exec_via: 'auto', last_status: 'ok', os_info: '', last_seen: null, open_alerts: 0, ...over });
 
 describe('deploySummary', () => {
   it('menyebut image, port yang dibuka, peringatan, dan bahwa data uji dihapus saat dicopot', () => {

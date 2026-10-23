@@ -12,7 +12,7 @@ import { Spark } from '@/components/ui/Charts';
 import { Fold } from '@/components/ui/Fold';
 import { Empty, Item, List, PageHead, Section } from '@/components/ui/Layout';
 import { IconBell, IconBulb, IconPulse, IconRefresh } from '@/components/icons';
-import { post, put } from '@/lib/api';
+import { post } from '@/lib/api';
 import { ago, dateTime } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { ChecksPanel } from './ChecksPanel';
@@ -33,15 +33,13 @@ function ProblemList({ items, onAck }: { items: Problem[]; onAck: (alertId: numb
 
 function MonitorBody({ id, d }: { id: number; d: MonitorView }) {
   const s = d.server, refresh = [['servers', id, 'monitor'], ['overview'], ['servers']], sum = summarize(d);
-  const toggle = useAction((on: boolean) => put(`/api/servers/${id}`, { monitor_on: on }), { success: (_, on) => (on ? 'Monitoring aktif' : 'Monitoring mati'), invalidate: refresh });
   const ack = useAction((alertId: number) => post(`/api/alerts/${alertId}/ack`), { invalidate: refresh });
   const cores = d.latest.nproc?.value, checksBad = d.checks.filter(isProblem).length;
 
   return (
     <>
       <VerdictBanner label="Kondisi server" verdict={sum.verdict} headline={sum.headline} detail={sum.detail}
-        facts={<>{d.checks.length > 0 && `${sum.counts.ok} normal${sum.counts.minor ? `, ${sum.counts.minor} Minor` : ''}${sum.counts.major ? `, ${sum.counts.major} Major` : ''}${sum.counts.crit ? `, ${sum.counts.crit} Critical` : ''}${sum.counts.off ? `, ${sum.counts.off} dimatikan` : ''} | `}terakhir terlihat {ago(s.last_seen)}{s.os_info ? ` | ${s.os_info}` : ''}</>}
-        aside={<label className="checkline"><input type="checkbox" checked={s.monitor_on} onChange={(e) => toggle.mutate(e.target.checked)} /><span>Pantau tiap {s.monitor_every} detik</span></label>} />
+        facts={<>{d.checks.length > 0 && `${sum.counts.ok} normal${sum.counts.minor ? `, ${sum.counts.minor} Minor` : ''}${sum.counts.major ? `, ${sum.counts.major} Major` : ''}${sum.counts.crit ? `, ${sum.counts.crit} Critical` : ''}${sum.counts.off ? `, ${sum.counts.off} dimatikan` : ''} | `}terakhir terlihat {ago(s.last_seen)}{s.os_info ? ` | ${s.os_info}` : ''}</>} />
 
       <Section title={sum.urgent.length ? `Perlu ditangani (${sum.urgent.length})` : 'Perlu ditangani'} icon={IconBell}>
         {sum.urgent.length ? <ProblemList items={sum.urgent} onAck={(id) => ack.mutateAsync(id)} /> : <p className="lbl calm">Tidak ada yang perlu ditangani sekarang.</p>}
@@ -49,14 +47,16 @@ function MonitorBody({ id, d }: { id: number; d: MonitorView }) {
       {sum.minor.length > 0 && <Fold title="Minor" hint={`${sum.minor.length} | lihat kalau sempat`}><ProblemList items={sum.minor} onAck={(id) => ack.mutateAsync(id)} /></Fold>}
       {sum.info.length > 0 && <Fold title="Info" hint={`${sum.info.length} | hanya jejak, tanpa tindakan`}><ProblemList items={sum.info} onAck={(id) => ack.mutateAsync(id)} /></Fold>}
 
-      <Section title="Resource server" icon={IconPulse}>
-        <div className="sparks">
-          <Spark label="Beban CPU (load 5 menit)" unit="" series={d.series.load5} warnAt={cores} format={(v) => v.toFixed(2)} />
-          <Spark label="Memori tersedia" unit="%" series={d.series.mem_avail_pct} format={(v) => v.toFixed(0)} />
-          <Spark label="Disk root terpakai" unit="%" series={d.series.disk_root_pct} warnAt={85} format={(v) => v.toFixed(0)} />
-          <Spark label="Tekanan I/O (PSI 10 dtk)" unit="%" series={d.series.io_psi10} warnAt={20} format={(v) => v.toFixed(1)} />
-        </div>
-      </Section>
+      {d.series.load5.length > 0 && (
+        <Section title="Resource server" icon={IconPulse}>
+          <div className="sparks">
+            <Spark label="Beban CPU (load 5 menit)" unit="" series={d.series.load5} warnAt={cores} format={(v) => v.toFixed(2)} />
+            <Spark label="Memori tersedia" unit="%" series={d.series.mem_avail_pct} format={(v) => v.toFixed(0)} />
+            <Spark label="Disk root terpakai" unit="%" series={d.series.disk_root_pct} warnAt={85} format={(v) => v.toFixed(0)} />
+            <Spark label="Tekanan I/O (PSI 10 dtk)" unit="%" series={d.series.io_psi10} warnAt={20} format={(v) => v.toFixed(1)} />
+          </div>
+        </Section>
+      )}
 
       <Fold title="Pemeriksaan layanan di dalam server" hint={d.checks.length ? `${d.checks.length} pemeriksaan${checksBad ? `, ${checksBad} tidak normal` : ', semua normal'}` : 'belum ada'} open={d.checks.length === 0}>
         <ChecksPanel serverId={id} checks={d.checks} />

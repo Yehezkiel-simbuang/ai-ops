@@ -8,11 +8,11 @@ export type ServerStatus = 'ok' | 'peringatan' | 'tidak terjangkau' | 'belum';
 export type ExecVia = 'auto' | 'ssh' | 'agent';
 export interface Server {
   id: number; name: string; host: string; port: number; username: string; key_path: string; has_ssh_key: boolean; ssh_pub: string; playground: boolean; use_sudo: boolean; services: string; notes: string;
-  monitor_on: boolean; monitor_every: number; exec_via: ExecVia; os_info: string; last_seen: number | null; last_status: ServerStatus; open_alerts: number;
+  exec_via: ExecVia; os_info: string; last_seen: number | null; last_status: ServerStatus; open_alerts: number;
 }
 export interface ServerInput {
   name: string; host: string; port: number; username: string; key_path: string; ssh_key?: string; use_sudo: boolean; services: string; notes: string;
-  monitor_on: boolean; monitor_every: number; exec_via: ExecVia;
+  exec_via: ExecVia;
 }
 export interface ConnectionTest { ok: boolean; info?: string; error?: string; hint?: string; ms?: number }
 
@@ -20,7 +20,7 @@ export interface ConnectionTest { ok: boolean; info?: string; error?: string; hi
 export interface PendingCommand { id: number; run_id: string; run_name: string | null; command: string; purpose: string; reason: string }
 export interface UsageTotal { input: number; output: number; calls: number; cost: number; costKnown: boolean }
 export interface Overview {
-  servers: Array<Pick<Server, 'id' | 'name' | 'host' | 'monitor_on' | 'last_seen' | 'open_alerts'> & { status: ServerStatus }>;
+  servers: Array<Pick<Server, 'id' | 'name' | 'host' | 'last_seen' | 'open_alerts'> & { status: ServerStatus }>;
   pending: PendingCommand[]; incidents: Incident[]; recsWaiting: number;
   maintenance: { overdue: number; soon: number }; rotationDue: number;
   runs: Run[]; usage: UsageTotal; alerts: Alert[]; setupReady: boolean; monitorReady: boolean;

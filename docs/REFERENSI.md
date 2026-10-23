@@ -161,6 +161,8 @@ Alur: agen menilai kondisi **di server sendiri** (CPU, memori, disk, tekanan I/O
 - Kegagalan jaringan: kejadian ditahan di disk (maks. 200) dan dikirim saat aplikasi kembali; backoff eksponensial.
 - Agen mati/jaringan putus diketahui aplikasi (peringatan "agen tidak mengirim detak jantung" ke kanal notifikasi Anda).
 
+**Tanpa pemantauan berkala.** Aplikasi tidak lagi menghubungi server secara berkala. Kondisi server datang dari agen (mendorong kejadian dan detak jantung) dan dari pemeriksaan manual lewat tombol Periksa sekarang. Status server (sehat, peringatan, tidak terjangkau) dihitung dari agen yang pernah terhubung: hidup = sehat, ada Major atau Critical terbuka = peringatan, diam = tidak terjangkau; server tanpa agen memakai hasil pemeriksaan manual terakhir. SSH tetap dipakai untuk setup, menjalankan perbaikan yang disetujui, dan pemeriksaan manual. Cek HTTP di halaman Layanan tetap berkala karena memang memantau dari luar.
+
 **Tingkat keparahan: Info, Minor, Major, Critical**
 
 | Tingkat | Artinya | Notifikasi bawaan |

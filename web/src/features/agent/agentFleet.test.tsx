@@ -37,7 +37,7 @@ describe('Armada agen', () => {
   });
 
   it('muncul di halaman Server, di atas tabel', async () => {
-    const srv = { id: 1, name: 'srv-1', host: '10.0.0.1', port: 22, username: 'ops', key_path: '', has_ssh_key: true, ssh_pub: '', playground: false, use_sudo: false, services: '', notes: '', monitor_on: true, monitor_every: 60, exec_via: 'auto', os_info: '', last_seen: NOW, last_status: 'ok', open_alerts: 0 };
+    const srv = { id: 1, name: 'srv-1', host: '10.0.0.1', port: 22, username: 'ops', key_path: '', has_ssh_key: true, ssh_pub: '', playground: false, use_sudo: false, services: '', notes: '',  exec_via: 'auto', os_info: '', last_seen: NOW, last_status: 'ok', open_alerts: 0 };
     mockApi({ 'GET /api/servers': { body: [srv] }, 'GET /api/agents': { body: [agent(1, 'mati')] } });
     renderWithProviders(<ServersPage />);
     const fleet = await screen.findByRole('heading', { name: 'Armada agen' }), table = screen.getByRole('table', { name: 'Daftar server' });

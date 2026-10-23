@@ -8,7 +8,7 @@ import { summarize } from './health';
 afterEach(() => vi.unstubAllGlobals());
 
 const NOW = Date.now();
-const server = (over: Partial<Server> = {}): Server => ({ id: 1, name: 'srv-a', host: '10.0.0.1', port: 22, username: 'ops', key_path: '', has_ssh_key: true, ssh_pub: '', playground: false, use_sudo: false, services: '', notes: '', monitor_on: true, monitor_every: 60, exec_via: 'ssh', os_info: 'Ubuntu 24.04', last_seen: NOW, last_status: 'ok', open_alerts: 0, ...over } as Server);
+const server = (over: Partial<Server> = {}): Server => ({ id: 1, name: 'srv-a', host: '10.0.0.1', port: 22, username: 'ops', key_path: '', has_ssh_key: true, ssh_pub: '', playground: false, use_sudo: false, services: '', notes: '',  exec_via: 'ssh', os_info: 'Ubuntu 24.04', last_seen: NOW, last_status: 'ok', open_alerts: 0, ...over } as Server);
 const check = (id: number, over: Partial<Check> = {}): Check => ({ id, name: `cek-${id}`, type: 'systemd', pack: 'mysql', enabled: true, warn: null, crit: null, last_status: 'ok', last_detail: 'normal', last_value: null, last_run: NOW, ...over });
 const alert = (id: number, over: Partial<Alert> = {}): Alert => ({ id, title: `alert-${id}`, detail: 'rinci', level: 'major', ts: NOW, resolved: false, acked: false, ...over });
 const view = (over: Partial<MonitorView> = {}): MonitorView => ({ server: server(), latest: {}, alerts: [], reports: [], checks: [check(1)], series: { load5: [{ ts: NOW, value: 1 }], mem_avail_pct: [], disk_root_pct: [], io_psi10: [], swap_used_mb: [] }, ...over });
@@ -74,5 +74,15 @@ describe('MonitorPage', () => {
   it('tanpa pemeriksaan, bagian pemeriksaan terbuka supaya tombol tambah terlihat', async () => {
     render(view({ checks: [] }));
     await screen.findByRole('heading', { name: /Kondisi|Sehat|Belum ada data/ }); expect(screen.getByText('Pemeriksaan layanan di dalam server').closest('details')).toHaveAttribute('open');
+  });
+
+  it('tanpa pemantauan berkala: tidak ada kotak "Pantau tiap N detik"; bagian Resource hanya tampil bila ada data dari pemeriksaan manual', async () => {
+    render(view({ series: { load5: [], mem_avail_pct: [], disk_root_pct: [], io_psi10: [], swap_used_mb: [] }, checks: [check(1, { last_run: NOW })] }));
+    await screen.findByRole('heading', { name: 'Sehat' });
+    expect(screen.queryByText(/Pantau tiap/)).not.toBeInTheDocument(); expect(screen.queryByRole('checkbox', { name: /Pantau/ })).not.toBeInTheDocument(); expect(screen.queryByRole('heading', { name: 'Resource server' })).not.toBeInTheDocument();
+  });
+  it('dengan data dari pemeriksaan manual, bagian Resource tampil', async () => {
+    render(view());
+    expect(await screen.findByRole('heading', { name: 'Resource server' })).toBeInTheDocument();
   });
 });

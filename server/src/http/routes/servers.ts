@@ -7,7 +7,7 @@ import { handle, idParam, parse } from '../handle.js';
 const serverBody = z.object({
   generate_key: z.boolean().optional(), playground: z.boolean().optional(),
   name: z.string().optional(), host: z.string().optional(), port: z.coerce.number().optional(), username: z.string().optional(), key_path: z.string().optional(), ssh_key: z.string().optional(),
-  use_sudo: z.boolean().optional(), services: z.string().optional(), notes: z.string().optional(), monitor_on: z.boolean().optional(), monitor_every: z.coerce.number().optional(), exec_via: z.string().optional()
+  use_sudo: z.boolean().optional(), services: z.string().optional(), notes: z.string().optional(), exec_via: z.string().optional()
 });
 
 export function serverRoutes(): Router {

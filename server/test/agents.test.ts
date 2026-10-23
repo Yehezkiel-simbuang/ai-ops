@@ -323,3 +323,25 @@ describe('armada agen', () => {
   });
   it('API armada tetap butuh sesi', async () => { expect((await h.app.inject({ method: 'GET', url: '/api/agents', headers: { host: 'localhost' } })).statusCode).toBe(401); });
 });
+
+describe('kondisi server tanpa pemantauan berkala', () => {
+  it('tidak ada lagi kolom atau pengaturan pemantauan berkala; isian lama diabaikan', async () => {
+    const cols = (await h.db.query("SELECT column_name FROM information_schema.columns WHERE table_name='servers' AND table_schema=current_schema()")) as Array<{ column_name: string }>;
+    expect(cols.map((c) => c.column_name)).not.toContain('monitor_on'); expect(cols.map((c) => c.column_name)).not.toContain('monitor_every');
+    const r = await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-lama', host: '10.7.0.1', username: 'ops', monitor_on: true, monitor_every: 15 }); expect(r.status).toBe(200);
+    expect(r.json).not.toHaveProperty('monitor_on'); expect(r.json).not.toHaveProperty('monitor_every');
+  });
+
+  it('kondisi diturunkan dari agen: hidup = sehat, ada Major atau Critical terbuka = peringatan, diam = tidak terjangkau; tanpa agen memakai pemeriksaan terakhir', async () => {
+    const id = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-turun', host: '10.7.0.2', username: 'ops' })).json.id as number;
+    const status = async () => (await h.call('GET', '/api/servers')).json.find((s: { id: number }) => s.id === id).last_status as string;
+    const overviewStatus = async () => (await h.call('GET', '/api/overview')).json.servers.find((s: { id: number }) => s.id === id).status as string;
+    expect(await status()).toBe('belum');   // tanpa agen dan tanpa pemeriksaan
+    await h.call('POST', `/api/servers/${id}/agent`, {}); expect(await status()).toBe('belum');   // agen dibuat tetapi belum pernah terhubung
+    await h.db.exec("UPDATE agents SET last_seen=$1, online=true WHERE server_id=$2", [Date.now(), id]); expect(await status()).toBe('ok'); expect(await overviewStatus()).toBe('ok');
+    await h.db.exec("INSERT INTO alerts(server_id,ts,level,key,title) VALUES($1,$2,'minor','k:minor','kecil')", [id, Date.now()]); expect(await status()).toBe('ok');   // Minor tidak membuat server bermasalah
+    await h.db.exec("INSERT INTO alerts(server_id,ts,level,key,title) VALUES($1,$2,'major','k:major','sedang')", [id, Date.now()]); expect(await status()).toBe('peringatan'); expect(await overviewStatus()).toBe('peringatan');
+    await h.db.exec("UPDATE agents SET online=false WHERE server_id=$1", [id]); expect(await status()).toBe('tidak terjangkau');
+    expect(((await h.call('GET', `/api/servers/${id}/monitor`)).json.server as { last_status: string }).last_status).toBe('tidak terjangkau');   // halaman Monitor memakai kondisi yang sama
+  });
+});

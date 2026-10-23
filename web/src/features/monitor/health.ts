@@ -28,7 +28,7 @@ const order = (a: Problem, b: Problem): number => RANK[b.level] - RANK[a.level] 
 export function summarize(d: MonitorView): Summary {
   const s = d.server, down = s.last_status === 'tidak terjangkau', active = d.alerts.filter((a) => !a.resolved), history = d.alerts.filter((a) => a.resolved);
   const all: Problem[] = [];
-  if (down) all.push({ id: 'down', kind: 'down', level: 'critical', title: 'Server tidak terjangkau', detail: 'Aplikasi tidak bisa masuk lewat SSH pada pemeriksaan terakhir. Metrik di bawah bisa sudah lama.', ts: s.last_seen });
+  if (down) all.push({ id: 'down', kind: 'down', level: 'critical', title: 'Server tidak terjangkau', detail: 'Agen berhenti mengirim detak jantung, atau SSH gagal pada pemeriksaan terakhir. Metrik di bawah (bila ada) bisa sudah lama.', ts: s.last_seen });
   for (const a of active) all.push({ id: `a${a.id}`, kind: 'alert', level: isLevel(a.level) ? a.level : 'major', title: a.title, detail: a.detail, ts: a.ts, alertId: a.id, acked: a.acked });
   const covered = new Set(active.map((a) => a.title));
   for (const c of d.checks) {
@@ -43,10 +43,10 @@ export function summarize(d: MonitorView): Summary {
   const critical = urgent.filter((p) => p.level === 'critical').length, major = urgent.length - critical, hasData = d.series.load5.length > 0 || enabled.some((c) => c.last_run);
 
   let verdict: Verdict = 'ok', headline = 'Sehat', detail = minor.length ? `Tidak ada yang mendesak. ${minor.length} Minor bisa dilihat kalau sempat.` : 'Tidak ada peringatan aktif dan semua pemeriksaan normal.';
-  if (down) { verdict = 'down'; headline = 'Tidak terjangkau'; detail = 'Server tidak menjawab SSH. Periksa jaringan, firewall, atau apakah server menyala.'; }
+  if (down) { verdict = 'down'; headline = 'Tidak terjangkau'; detail = 'Server tidak menjawab (agen diam atau SSH gagal). Periksa jaringan, firewall, atau apakah server menyala.'; }
   else if (critical > 0) { verdict = 'crit'; headline = 'Critical'; detail = `${critical} Critical${major ? ` dan ${major} Major` : ''} perlu ditangani.`; }
   else if (major > 0) { verdict = 'warn'; headline = 'Perlu perhatian'; detail = `${major} Major hari ini, belum ada yang Critical.`; }
-  else if (!hasData) { verdict = 'nodata'; headline = 'Belum ada data'; detail = 'Aktifkan pemantauan lalu tekan "Periksa sekarang", atau tunggu satu putaran pemeriksaan.'; }
+  else if (!hasData) { verdict = 'nodata'; headline = 'Belum ada data'; detail = 'Belum ada agen yang melapor dan belum ada pemeriksaan manual. Pasang agen (menu Server, ikon Agen) atau tekan "Periksa sekarang".'; }
   return { verdict, headline, detail, urgent, minor, info, counts, history };
 }
 
