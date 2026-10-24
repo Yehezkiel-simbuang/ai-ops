@@ -82,6 +82,15 @@ describe('kerentanan yang ditutup patch', () => {
     await patch(facts()); await Patching.settled(); expect((await h.db.query('SELECT cve FROM kev')).length).toBeGreaterThan(100); kevBody = { vulnerabilities: kevIds.map((cveID) => ({ cveID })) };
   });
 
+  it('paket dari repositori pihak ketiga tidak ditanyakan ke OSV dan ditandai tidak bisa dicek, bukan bersih; agen lama tanpa penanda dianggap resmi', async () => {
+    await reset();
+    await patch(facts({ updates: 3, packages: [{ name: 'curl', source: 'curl', old: '1', new: '2', sec: false, official: true }, { name: 'docker-ce', old: '1', new: '2', sec: false, official: false }, { name: 'liblzma5', source: 'xz-utils', old: '1', new: '2', sec: true }] })); await Patching.settled();
+    expect(osvCalls.some((c) => c.includes('docker-ce'))).toBe(false); expect(osvCalls.some((c) => c.includes('xz-utils'))).toBe(true);   // tanpa penanda = resmi, tetap dicek
+    const d = (await h.call('GET', `/api/servers/${sid}/patching`)).json, docker = d.packages.find((p: any) => p.name === 'docker-ce');
+    expect(docker).toMatchObject({ external: true, unknown: false, cves: [] }); expect(d.packages.find((p: any) => p.name === 'curl')).toMatchObject({ external: false });
+    expect((await rowOf()).vuln_unknown).toBe(1);
+  });
+
   it('distro yang belum didukung: tidak ada panggilan keluar dan jumlah CVE tidak diketahui (null), rincian tetap bisa dibuka', async () => {
     await reset(); await patch(facts({ os_id: 'alpine', os_version: '3.19', os_name: 'Alpine' })); await Patching.settled();
     expect(osvCalls).toEqual([]); expect(kevCalls).toBe(0); expect((await rowOf()).cves).toBeNull();

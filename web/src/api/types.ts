@@ -53,7 +53,7 @@ export interface AgentStatus {
 export type ExecPath = 'ssh' | 'agent' | 'none';
 export interface FleetAgent { server_id: number; name: string; state: 'hidup' | 'mati' | 'belum_terhubung' | 'belum_dipasang'; last_seen: number | null; version: string; exec_enabled: boolean; open_keys: number }
 export interface PatchRow { server_id: number; name: string; os: string; kernel: string; reported: number | null; stale: boolean; updates: number | null; security: number | null; reboot: boolean; reboot_days: number | null; eol_days: number | null; cves: number | null; exploited: number; vuln_unknown: number; level: Level | null; reasons: Array<{ level: Level; text: string }> }
-export interface PatchPkg { name: string; source?: string; old: string; new: string; sec: boolean; cves: string[]; ids: string[]; exploited: string[]; unknown: boolean }
+export interface PatchPkg { name: string; source?: string; old: string; new: string; sec: boolean; cves: string[]; ids: string[]; exploited: string[]; unknown: boolean; external: boolean }
 export interface PatchDetail { name: string; os: string; reported: number | null; ecosystem: string | null; supported: boolean; matched_at: number | null; kev_at: number | null; total: number; packages: PatchPkg[] }
 export interface PatchOverview { rows: PatchRow[]; without_agent: number }
 export interface AgentOverview { agent: AgentStatus | null; path: ExecPath; binaries: string[] }

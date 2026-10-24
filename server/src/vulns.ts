@@ -14,8 +14,9 @@ let doFetch: Fetcher = (url, init) => fetch(url, init);
 export function setFetch(f: Fetcher | null): void { doFetch = f ?? ((url, init) => fetch(url, init)); }
 
 export interface Vuln { id: string; cves: string[]; summary: string }
-export interface PkgFacts { name: string; source?: string; old: string; new: string; sec: boolean }
-export interface PkgVulns extends PkgFacts { cves: string[]; ids: string[]; exploited: string[]; unknown: boolean }
+export interface PkgFacts { name: string; source?: string; old: string; new: string; sec: boolean; official?: boolean }
+/** external = bukan dari repositori distro: tidak ada di basis data kerentanan distro, jadi tidak bisa dicek (bukan berarti bersih). unknown = sumber data tidak terjangkau. */
+export interface PkgVulns extends PkgFacts { cves: string[]; ids: string[]; exploited: string[]; unknown: boolean; external: boolean }
 export interface VulnReport { ecosystem: string | null; pkgs: PkgVulns[]; kev_at: number | null }
 
 /** Nama ekosistem OSV; null = distro yang belum didukung (tidak dinilai). */
@@ -91,16 +92,17 @@ export async function assessPackages(osId: string | undefined, osVersion: string
   const kevAt = await ensureKev(now);
   const srcOf = (p: PkgFacts) => p.source || p.name;
   // paket keamanan didahulukan; batasi jumlah paket sumber agar satu laporan besar tidak menahan jalur ini terlalu lama
-  const order = [...pkgs].sort((a, b) => Number(b.sec) - Number(a.sec)), sources = [...new Set(order.map(srcOf))].slice(0, MAX_SOURCES), keep = new Set(sources);
+  const checkable = pkgs.filter((p) => p.official !== false);   // agen lama tidak mengirim penanda: dianggap resmi
+  const order = [...checkable].sort((a, b) => Number(b.sec) - Number(a.sec)), sources = [...new Set(order.map(srcOf))].slice(0, MAX_SOURCES), keep = new Set(sources);
   const jobs = order.filter((p) => keep.has(srcOf(p))), found = new Map<string, Vuln[] | null>();
   const uniq = [...new Map(jobs.flatMap((p) => [[`${srcOf(p)}|${p.old}`, [srcOf(p), p.old] as const], [`${srcOf(p)}|${p.new}`, [srcOf(p), p.new] as const]])).entries()];
   await pool(uniq, PARALLEL, async ([k, [s, v]]) => { found.set(k, await vulnsAt(eco, s, v, now)); });
-  const out: PkgVulns[] = [];
+  const out: PkgVulns[] = pkgs.filter((p) => p.official === false).map((p) => ({ ...p, cves: [], ids: [], exploited: [], unknown: false, external: true }));
   for (const p of jobs) {
     const before = found.get(`${srcOf(p)}|${p.old}`), after = found.get(`${srcOf(p)}|${p.new}`);
-    if (!before || !after) { out.push({ ...p, cves: [], ids: [], exploited: [], unknown: true }); continue; }
+    if (!before || !after) { out.push({ ...p, cves: [], ids: [], exploited: [], unknown: true, external: false }); continue; }
     const still = new Set(after.map((v) => v.id)), fixed = before.filter((v) => !still.has(v.id)), cves = [...new Set(fixed.flatMap((v) => v.cves))];
-    out.push({ ...p, cves, ids: fixed.map((v) => v.id).slice(0, 20), exploited: await exploitedAmong(cves), unknown: false });
+    out.push({ ...p, cves, ids: fixed.map((v) => v.id).slice(0, 20), exploited: await exploitedAmong(cves), unknown: false, external: false });
   }
   return { ecosystem: eco, pkgs: out, kev_at: kevAt };
 }

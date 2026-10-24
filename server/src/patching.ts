@@ -14,7 +14,7 @@ export const patchBody = z.object({
   manager: z.string().max(20).optional(), updates: z.number().int().min(0).max(100000).nullish(), security: z.number().int().min(0).max(100000).nullish(),
   reboot: z.boolean().optional(), reboot_since: z.number().int().min(0).optional(),
   os_id: z.string().max(40).optional(), os_version: z.string().max(40).optional(), os_name: z.string().max(100).optional(), kernel: z.string().max(80).optional(),
-  packages: z.array(z.object({ name: z.string().max(100), source: z.string().max(100).optional(), old: z.string().max(100), new: z.string().max(100), sec: z.boolean() })).max(400).optional()
+  packages: z.array(z.object({ name: z.string().max(100), source: z.string().max(100).optional(), old: z.string().max(100), new: z.string().max(100), sec: z.boolean(), official: z.boolean().optional() })).max(400).optional()
 });
 export type PatchFacts = z.infer<typeof patchBody>;
 
@@ -111,7 +111,7 @@ export async function overview(now = Date.now()): Promise<{ rows: PatchRow[]; wi
     rows.push({
       server_id: r.server_id, name: r.name, os: f.os_name || [f.os_id, f.os_version].filter(Boolean).join(' '), kernel: f.kernel ?? '', reported: r.patch_ts, stale,
       updates: f.updates ?? null, security: f.security ?? null, reboot: !!f.reboot, reboot_days: f.reboot && f.reboot_since ? Math.floor((now - f.reboot_since * 1000) / DAY) : null, eol_days: eol == null ? null : Math.floor((eol - now) / DAY),
-      cves: vr ? new Set(vr.pkgs.flatMap((p) => p.cves)).size : null, exploited: vr ? new Set(vr.pkgs.flatMap((p) => p.exploited)).size : 0, vuln_unknown: vr ? vr.pkgs.filter((p) => p.unknown).length : 0,
+      cves: vr ? new Set(vr.pkgs.flatMap((p) => p.cves)).size : null, exploited: vr ? new Set(vr.pkgs.flatMap((p) => p.exploited)).size : 0, vuln_unknown: vr ? vr.pkgs.filter((p) => p.unknown || p.external).length : 0,
       level: found.reduce<Level | null>((m, x) => (m === null || RANK[x.level] > RANK[m] ? x.level : m), null), reasons: found.sort((a, b) => RANK[b.level] - RANK[a.level]).map((x) => ({ level: x.level, text: x.detail }))
     });
   }
@@ -125,7 +125,7 @@ export async function detail(serverId: number) {
   if (!r) throw bad('Server tidak ada');
   const f = r.patch, matched = r.patch_vulns, eco = f ? Vulns.ecosystemOf(f.os_id, f.os_version) : null;
   const byName = new Map((matched?.pkgs ?? []).map((p) => [p.name, p]));
-  const pkgs = (f?.packages ?? []).map((p) => byName.get(p.name) ?? { ...p, cves: [], ids: [], exploited: [], unknown: false, matched: false });
+  const pkgs = (f?.packages ?? []).map((p) => byName.get(p.name) ?? { ...p, cves: [], ids: [], exploited: [], unknown: false, external: p.official === false });
   pkgs.sort((a, b) => b.exploited.length - a.exploited.length || Number(b.sec) - Number(a.sec) || b.cves.length - a.cves.length || a.name.localeCompare(b.name));
   return { name: r.name, os: f ? f.os_name || [f.os_id, f.os_version].filter(Boolean).join(' ') : '', reported: r.patch_ts, ecosystem: eco, supported: eco !== null, matched_at: r.patch_vulns_ts, kev_at: matched?.kev_at ?? null, total: f?.packages?.length ?? 0, packages: pkgs };
 }

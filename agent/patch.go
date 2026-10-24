@@ -32,6 +32,14 @@ type PatchPkg struct {
 	Old    string `json:"old"`
 	New    string `json:"new"`
 	Sec    bool   `json:"sec"`
+	// Official: berasal dari repositori distro (Ubuntu atau Debian). Paket dari repositori lain tidak ada di basis data kerentanan distro, jadi tidak bisa dicek.
+	Official bool `json:"official"`
+}
+
+// officialOrigin: asal pertama berbentuk "Ubuntu:24.04/noble-updates" atau "Debian:12/stable-security".
+func officialOrigin(origin string) bool {
+	first := strings.TrimSpace(strings.SplitN(origin, ",", 2)[0])
+	return strings.HasPrefix(first, "Ubuntu:") || strings.HasPrefix(first, "Debian:")
 }
 
 const maxPatchPkgs = 400
@@ -95,7 +103,7 @@ func parsePatch(out string) PatchInfo {
 			p.Security = num(v)
 		case "pkg":
 			if f := strings.Split(v, "|"); len(f) == 4 && len(p.Packages) < maxPatchPkgs {
-				p.Packages = append(p.Packages, PatchPkg{Name: clipStr(f[0], 100), Old: clipStr(f[1], 100), New: clipStr(f[2], 100), Sec: strings.Contains(f[3], "security")})
+				p.Packages = append(p.Packages, PatchPkg{Name: clipStr(f[0], 100), Old: clipStr(f[1], 100), New: clipStr(f[2], 100), Sec: strings.Contains(f[3], "security"), Official: officialOrigin(f[3])})
 			}
 		case "src":
 			if n, sp, ok := strings.Cut(v, "|"); ok {

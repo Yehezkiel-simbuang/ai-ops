@@ -85,6 +85,25 @@ func TestParsePatchPackagesWithSource(t *testing.T) {
 	}
 }
 
+func TestParsePatchPackagesMarkThirdPartyOrigins(t *testing.T) {
+	out := strings.Join([]string{
+		"pkg=curl|1|2|Ubuntu:24.04/noble-updates [amd64]",
+		"pkg=openssl|1|2|Debian:12.5/stable-security [amd64]",
+		"pkg=docker-ce|1|2|Docker:noble/stable [amd64]",
+		"pkg=mysql-server|1|2|MySQL:noble/mysql-8.0, Ubuntu:24.04/noble-updates [amd64]",
+	}, "\n")
+	got := map[string]bool{}
+	for _, p := range parsePatch(out).Packages {
+		got[p.Name] = p.Official
+	}
+	want := map[string]bool{"curl": true, "openssl": true, "docker-ce": false, "mysql-server": false}
+	for n, w := range want {
+		if got[n] != w {
+			t.Errorf("%s: official=%v, harusnya %v (asal pertama yang menentukan)", n, got[n], w)
+		}
+	}
+}
+
 func TestParsePatchPackagesAreCapped(t *testing.T) {
 	var sb strings.Builder
 	for i := 0; i < maxPatchPkgs+50; i++ {

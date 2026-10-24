@@ -49,7 +49,7 @@ function PatchDetailBody({ id, onClose }: { id: number; onClose: () => void }) {
               <tr key={p.name}>
                 <td data-label="Paket"><strong>{p.name}</strong>{p.sec && <> <Badge tone="warn">keamanan</Badge></>}{p.source && p.source !== p.name && <div className="lbl">sumber: {p.source}</div>}</td>
                 <td data-label="Versi"><span className="lbl">{p.old} ke {p.new}</span></td>
-                <td data-label="Kerentanan yang ditutup">{p.unknown ? <span className="lbl">belum bisa dicek (sumber tidak terjangkau)</span> : p.cves.length || p.ids.length
+                <td data-label="Kerentanan yang ditutup">{p.external ? <span className="lbl">repositori pihak ketiga: belum bisa dicek</span> : p.unknown ? <span className="lbl">belum bisa dicek (sumber tidak terjangkau)</span> : p.cves.length || p.ids.length
                   ? <>{p.cves.slice(0, 8).map((c) => <span key={c} style={{ marginRight: 6 }}><a href={`https://nvd.nist.gov/vuln/detail/${c}`} target="_blank" rel="noreferrer noopener">{c}</a>{p.exploited.includes(c) && <> <Badge tone="bad">dieksploitasi</Badge></>}</span>)}{p.cves.length > 8 && <span className="lbl">dan {p.cves.length - 8} lagi</span>}{!p.cves.length && <span className="lbl">{p.ids.join(', ')}</span>}</>
                   : <span className="lbl">{d.supported && d.matched_at ? 'tidak ada yang tercatat' : '-'}</span>}</td>
               </tr>))}</tbody>
