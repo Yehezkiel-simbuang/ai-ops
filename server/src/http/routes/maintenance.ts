@@ -15,6 +15,7 @@ export function maintenanceRoutes(): Router {
   const r = Router();
   r.get('/maintenance', handle((req) => Maint.list({ scope: req.query.scope as string | undefined, serverId: req.query.server ? Number(req.query.server) : null })));
   r.get('/maintenance/patching', handle(() => Patching.overview()));   // sebelum /maintenance/:id
+  r.get('/servers/:id/patching', handle((req) => Patching.detail(idParam(req))));
   r.get('/maintenance/templates', handle(() => Maint.TEMPLATES));
   r.put('/maintenance/:id', handle((req) => Maint.update(idParam(req), parse(taskBody, req.body) as never)));
   r.delete('/maintenance/:id', handle(async (req) => { await Maint.remove(idParam(req)); return { ok: true }; }));

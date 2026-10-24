@@ -4,7 +4,7 @@ import { queryOptions, useMutation, useQueryClient, type QueryKey } from '@tanst
 import { get, qs } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type {
-  AgentOverview, FleetAgent, PatchOverview, AppConfig, AppSettings, AuditEntry, Channel, ChecksMeta, Credential, IncidentDetail, Incident, InventoryRow, MaintenanceLogEntry,
+  AgentOverview, FleetAgent, PatchDetail, PatchOverview, AppConfig, AppSettings, AuditEntry, Channel, ChecksMeta, Credential, IncidentDetail, Incident, InventoryRow, MaintenanceLogEntry,
   MaintenanceTask, MaintenanceTemplate, MonitorView, NotificationLog, Overview, Run, RunDetail, RunTemplate, Server, ServerProfile, UsageSummary, User
 } from './types';
 
@@ -38,6 +38,7 @@ export const q = {
   vault: (search: string) => queryOptions({ queryKey: ['vault', search], queryFn: () => get<Credential[]>(`/api/vault${qs({ q: search })}`), refetchInterval: s(15) }),
   maintenance: () => queryOptions({ queryKey: ['maintenance'], queryFn: () => get<MaintenanceTask[]>('/api/maintenance'), refetchInterval: s(15) }),
   patching: () => queryOptions({ queryKey: ['maintenance', 'patching'], queryFn: () => get<PatchOverview>('/api/maintenance/patching'), refetchInterval: s(30) }),
+  patchDetail: (id: number) => queryOptions({ queryKey: ['servers', id, 'patching'], queryFn: () => get<PatchDetail>(`/api/servers/${id}/patching`) }),
   maintenanceTemplates: () => queryOptions({ queryKey: ['maintenance-templates'], queryFn: () => get<MaintenanceTemplate[]>('/api/maintenance/templates'), staleTime: Infinity }),
   profile: (id: number) => queryOptions({ queryKey: ['servers', id, 'profile'], queryFn: () => get<ServerProfile>(`/api/servers/${id}/profile`) }),
   serverCredentials: (id: number) => queryOptions({ queryKey: ['servers', id, 'credentials'], queryFn: () => get<Credential[]>(`/api/servers/${id}/credentials`) }),

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -61,5 +63,34 @@ func TestReportPatchFailureIsReported(t *testing.T) {
 	defer app.mu.Unlock()
 	if len(app.patches) != 0 {
 		t.Fatal("tidak boleh mengirim laporan kosong")
+	}
+}
+
+func TestParsePatchPackagesWithSource(t *testing.T) {
+	out := "manager=apt\nupdates=2\nsecurity=1\n" +
+		"pkg=liblzma5|5.6.1-3|5.6.1-4|Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [amd64]\n" +
+		"pkg=curl|8.5.0-1|8.5.0-2|Ubuntu:24.04/noble-updates [amd64]\n" +
+		"pkg=rusak-tanpa-bagian\n" +
+		"src=liblzma5|xz-utils\nsrc=curl|curl\n"
+	p := parsePatch(out)
+	if len(p.Packages) != 2 {
+		t.Fatalf("baris rusak harus dilewati: %+v", p.Packages)
+	}
+	a, b := p.Packages[0], p.Packages[1]
+	if a.Name != "liblzma5" || a.Source != "xz-utils" || a.Old != "5.6.1-3" || a.New != "5.6.1-4" || !a.Sec {
+		t.Fatalf("paket keamanan: %+v", a)
+	}
+	if b.Name != "curl" || b.Sec {
+		t.Fatalf("paket biasa tidak boleh ditandai keamanan: %+v", b)
+	}
+}
+
+func TestParsePatchPackagesAreCapped(t *testing.T) {
+	var sb strings.Builder
+	for i := 0; i < maxPatchPkgs+50; i++ {
+		fmt.Fprintf(&sb, "pkg=p%d|1|2|x\n", i)
+	}
+	if n := len(parsePatch(sb.String()).Packages); n != maxPatchPkgs {
+		t.Fatalf("batas %d, dapat %d", maxPatchPkgs, n)
 	}
 }

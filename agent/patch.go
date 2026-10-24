@@ -21,7 +21,20 @@ type PatchInfo struct {
 	OSVersion   string `json:"os_version,omitempty"`
 	OSName      string `json:"os_name,omitempty"`
 	Kernel      string `json:"kernel,omitempty"`
+	// Paket yang akan naik (hanya apt): dipakai aplikasi untuk mencocokkan kerentanan. Dibatasi maxPatchPkgs.
+	Packages []PatchPkg `json:"packages,omitempty"`
 }
+
+// PatchPkg: Source = nama paket sumber (data kerentanan Debian dan Ubuntu dicatat per paket sumber, bukan paket biner).
+type PatchPkg struct {
+	Name   string `json:"name"`
+	Source string `json:"source,omitempty"`
+	Old    string `json:"old"`
+	New    string `json:"new"`
+	Sec    bool   `json:"sec"`
+}
+
+const maxPatchPkgs = 400
 
 // Hanya membaca. apt-get -s (simulasi) dan dnf tidak mengubah apa pun; apt memakai daftar paket yang sudah ada (tanpa mengunduh).
 const patchScript = `. /etc/os-release 2>/dev/null
@@ -29,6 +42,9 @@ echo "os_id=$ID"; echo "os_version=$VERSION_ID"; echo "os_name=$PRETTY_NAME"; ec
 if command -v apt-get >/dev/null 2>&1; then
   echo "manager=apt"; L=$(apt-get -s upgrade 2>/dev/null | grep '^Inst ')
   echo "updates=$(printf '%s' "$L" | grep -c .)"; echo "security=$(printf '%s' "$L" | grep -ci security)"
+  echo "$L" | sed -n 's/^Inst \([^ ]*\) \[\([^]]*\)\] (\([^ ]*\) \(.*\))$/pkg=\1|\2|\3|\4/p' | head -400
+  N=$(echo "$L" | sed -n 's/^Inst \([^ ]*\) \[.*/\1/p' | head -400 | tr '\n' ' ')
+  [ -n "$N" ] && dpkg-query -W -f='src=${Package}|${source:Package}\n' $N 2>/dev/null
 elif command -v dnf >/dev/null 2>&1; then
   echo "manager=dnf"; echo "updates=$(dnf -q check-update 2>/dev/null | grep -cE '^[A-Za-z0-9_.+-]+\.[A-Za-z0-9_]+ +[0-9]')"
   echo "security=$(dnf -q updateinfo list security 2>/dev/null | grep -c .)"
@@ -48,6 +64,7 @@ func CollectPatch(ctx context.Context, run Runner) (PatchInfo, error) {
 
 func parsePatch(out string) PatchInfo {
 	var p PatchInfo
+	src := map[string]string{}
 	num := func(v string) *int {
 		n, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil || n < 0 {
@@ -76,6 +93,14 @@ func parsePatch(out string) PatchInfo {
 			p.Updates = num(v)
 		case "security":
 			p.Security = num(v)
+		case "pkg":
+			if f := strings.Split(v, "|"); len(f) == 4 && len(p.Packages) < maxPatchPkgs {
+				p.Packages = append(p.Packages, PatchPkg{Name: clipStr(f[0], 100), Old: clipStr(f[1], 100), New: clipStr(f[2], 100), Sec: strings.Contains(f[3], "security")})
+			}
+		case "src":
+			if n, sp, ok := strings.Cut(v, "|"); ok {
+				src[n] = clipStr(sp, 100)
+			}
 		case "reboot":
 			p.Reboot = v == "1"
 		case "reboot_since":
@@ -83,6 +108,9 @@ func parsePatch(out string) PatchInfo {
 				p.RebootSince = n
 			}
 		}
+	}
+	for i := range p.Packages {
+		p.Packages[i].Source = src[p.Packages[i].Name]
 	}
 	if p.Updates == nil { // tanpa jumlah pembaruan, angka keamanan tidak berarti
 		p.Security = nil
