@@ -26,8 +26,15 @@ export const BASE_LIMITS: Record<string, BaseLimit> = {
 
 /** Batas angka yang dihitung agen di server (bukan lewat SSH). Disimpan di global_limits dengan kunci "agent:<nama>". */
 export const AGENT_LIMITS: Record<string, BaseLimit> = {
-  ssh_fail: { label: 'Login SSH gagal', description: 'Jumlah login SSH gagal dalam jendela waktu (bawaan 10 menit), dihitung oleh agen di server. Tinggi berarti ada yang menebak password.', metric: '', unit: 'kali', dir: 'gt', minor: 5, warn: 15, crit: 30, min: 0, max: 100000 }
+  ssh_fail: { label: 'Login SSH gagal', description: 'Jumlah login SSH gagal dalam jendela waktu (bawaan 10 menit), dihitung oleh agen di server. Tinggi berarti ada yang menebak password.', metric: '', unit: 'kali', dir: 'gt', minor: 5, warn: 15, crit: 30, min: 0, max: 100000 },
+  // Fakta pembaruan dilaporkan agen tetapi DINILAI aplikasi (patching.ts), jadi tidak ikut dikirim ke agen (lihat SERVER_SIDE).
+  patch_security: { label: 'Pembaruan keamanan tertunda', description: 'Jumlah paket yang punya pembaruan keamanan dan belum dipasang. Satu saja sudah layak dijadwalkan; menumpuk berarti server rawan.', metric: '', unit: 'paket', dir: 'gt', minor: 0, warn: 10, crit: 30, min: 0, max: 100000 },
+  patch_updates: { label: 'Pembaruan paket tertunda', description: 'Jumlah semua paket yang bisa diperbarui, termasuk yang bukan keamanan.', metric: '', unit: 'paket', dir: 'gt', minor: 25, warn: 60, crit: 200, min: 0, max: 100000 },
+  reboot_days: { label: 'Reboot tertunda', description: 'Berapa hari server menunggu reboot setelah kernel atau pustaka diperbarui. Selama belum reboot, perbaikan keamanannya belum dipakai.', metric: '', unit: 'hari', dir: 'gt', minor: 3, warn: 14, crit: 45, min: 0, max: 3650 },
+  eol_days: { label: 'Sisa masa dukungan OS', description: 'Berapa hari lagi OS masih menerima pembaruan keamanan (dari daftar versi yang dikenal aplikasi). Nol atau minus berarti dukungannya sudah berakhir.', metric: '', unit: 'hari', dir: 'lt', minor: 180, warn: 60, crit: 0, min: -3650, max: 3650 }
 };
+/** Batas agent:* yang dihitung aplikasi, bukan agen. */
+export const SERVER_SIDE = new Set(['patch_security', 'patch_updates', 'reboot_days', 'eol_days']);
 export interface AgentEvent { label: string; description: string; level: Level }
 /** Kejadian perubahan dari agen: tingkatnya ditetapkan menurut jenisnya (bukan batas angka) dan bisa diubah di halaman Standar. */
 export const AGENT_EVENTS: Record<string, AgentEvent> = {
@@ -173,7 +180,7 @@ export async function agentConfig() {
   const o = await loadOverrides(), limits: Record<string, { minor: number | null; major: number | null; critical: number | null }> = {};
   const add = (name: string, key: string, b: BaseLimit) => { const ov = o.get(key); limits[name] = { minor: ov ? ov.minor : b.minor, major: ov ? ov.warn : b.warn, critical: ov ? ov.crit : b.crit }; };
   for (const k of ['load', 'mem', 'disk', 'io']) add(k, baseKey(k), BASE_LIMITS[k]!);
-  for (const [k, b] of Object.entries(AGENT_LIMITS)) add(k, agentKey(k), b);
+  for (const [k, b] of Object.entries(AGENT_LIMITS)) if (!SERVER_SIDE.has(k)) add(k, agentKey(k), b);
   const events = await eventLevels(), version = createHash('sha256').update(JSON.stringify({ limits, events })).digest('hex').slice(0, 12);
   return { version, limits, events };
 }

@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import * as Maint from '../../maintenance.js';
+import * as Patching from '../../patching.js';
 import { handle, idParam, parse } from '../handle.js';
 
 const taskBody = z.object({
@@ -13,6 +14,7 @@ const completeBody = z.object({ notes: z.string().max(1000).optional(), done_at:
 export function maintenanceRoutes(): Router {
   const r = Router();
   r.get('/maintenance', handle((req) => Maint.list({ scope: req.query.scope as string | undefined, serverId: req.query.server ? Number(req.query.server) : null })));
+  r.get('/maintenance/patching', handle(() => Patching.overview()));   // sebelum /maintenance/:id
   r.get('/maintenance/templates', handle(() => Maint.TEMPLATES));
   r.put('/maintenance/:id', handle((req) => Maint.update(idParam(req), parse(taskBody, req.body) as never)));
   r.delete('/maintenance/:id', handle(async (req) => { await Maint.remove(idParam(req)); return { ok: true }; }));

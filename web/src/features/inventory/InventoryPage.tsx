@@ -10,6 +10,7 @@ import { IconLayers, IconPlus } from '@/components/icons';
 import { useDebounced } from '@/lib/useDebounced';
 import { CredentialDialog } from './CredentialDialog';
 import { MaintenanceGrid, VaultGrid } from './InventoryGrids';
+import { PatchingPanel } from './PatchingPanel';
 import { ServerGrid } from './ServerGrid';
 
 type Tab = 'server' | 'vault' | 'maint';
@@ -32,7 +33,10 @@ function VaultTab({ search }: { search: string }) {
 function MaintenanceTab({ search }: { search: string }) {
   const query = useQuery(q.maintenance()), needle = search.toLowerCase();
   return (
-    <Async query={query}>{(rows) => <MaintenanceGrid rows={rows.filter((t) => !needle || `${t.title} ${t.server_name ?? ''}`.toLowerCase().includes(needle))} searching={!!needle} />}</Async>
+    <>
+      <PatchingPanel />
+      <Async query={query}>{(rows) => <MaintenanceGrid rows={rows.filter((t) => !needle || `${t.title} ${t.server_name ?? ''}`.toLowerCase().includes(needle))} searching={!!needle} />}</Async>
+    </>
   );
 }
 

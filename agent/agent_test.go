@@ -79,6 +79,7 @@ type fakeApp struct {
 
 	configJSON    string // jawaban GET /agent/v1/config; bila diisi, detak jantung memberi tahu versinya
 	configFetches int
+	patches       []string // badan POST /agent/v1/patch
 }
 
 func newFakeApp(t *testing.T) *fakeApp {
@@ -113,6 +114,9 @@ func newFakeApp(t *testing.T) *fakeApp {
 				resp["cfg"] = c.Version
 			}
 			json.NewEncoder(w).Encode(resp)
+		case r.URL.Path == "/agent/v1/patch":
+			f.patches = append(f.patches, string(body))
+			w.Write([]byte(`{"ok":true}`))
 		case r.URL.Path == "/agent/v1/config":
 			f.configFetches++
 			w.Write([]byte(f.configJSON))

@@ -7,6 +7,8 @@ import { AGENT_FILES } from '../agent-install.js';
 import * as Agents from '../agents.js';
 import { bad } from '../context.js';
 import * as Incidents from '../incidents.js';
+import * as Patching from '../patching.js';
+import { patchBody } from '../patching.js';
 import * as Standards from '../standards.js';
 import { handle } from './handle.js';
 import { agentLimiter } from './middleware/rateLimit.js';
@@ -54,6 +56,12 @@ function v1Routes(): Router {
     return { ...(await Agents.heartbeat(req.agent!.server_id, hb.data, req.ip ?? '')), cfg: (await Standards.agentConfig()).version };   // versi konfigurasi: agen mengambil yang baru bila berbeda
   }));
   r.get('/config', handle(() => Standards.agentConfig()));   // batas dan tingkat kejadian dari halaman Standar
+  r.post('/patch', handle(async (req) => {   // fakta pembaruan sistem; dinilai aplikasi menurut halaman Standar
+    const p = patchBody.safeParse(req.body ?? {});
+    if (!p.success) throw bad('laporan pembaruan tidak valid');
+    await Patching.report(req.agent!.server_id, p.data);
+    return { ok: true };
+  }));
   r.post('/events', handle(async (req) => {
     const b = batchBody.safeParse(req.body ?? {});
     if (!b.success) throw bad('badan tidak valid');

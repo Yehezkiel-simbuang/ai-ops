@@ -9,7 +9,7 @@ AI Ops adalah aplikasi web yang dijalankan sendiri (self-hosted). Agen AI menyia
 - **Setup oleh agen.** Jelaskan tujuan ("pasang dan atur MySQL"), agen menyusun langkah, dan Anda menyetujui satu per satu.
 - **Monitoring layanan dari dalam server.** Beban, memori, disk, MySQL, PostgreSQL, Redis, Nginx, Docker, dan banyak lagi. Layanan yang terdeteksi ditawarkan otomatis, dan Anda bisa menambah yang belum ada.
 - **Standar pemantauan global.** Satu tempat menentukan kapan sebuah nilai dianggap peringatan atau kritis, berlaku untuk semua server. AI bisa mengusulkan angkanya dari data nyata server Anda.
-- **Inventaris dan vault.** Dokumentasi tiap server, kredensial terenkripsi, dan jadwal pemeliharaan.
+- **Inventaris dan vault.** Dokumentasi tiap server, kredensial terenkripsi, dan jadwal pemeliharaan, plus daftar server yang perlu dipatch, direboot, atau OS-nya sudah habis dukungan (dilaporkan agen).
 - **Empat tingkat keparahan** (Info, Minor, Major, Critical): hanya Critical dan Major yang dikirim langsung ke Telegram, ntfy, webhook, atau email; Minor masuk ringkasan harian dan Info hanya tercatat. Ada jam tenang untuk Major.
 - **Lab arsitektur, uji beban, dan Playground.** Coba arsitektur di simulator, ukur dengan k6 sungguhan, dan pasang susunan Docker Compose di server uji.
 - **Agen kecil opsional** (Go, satu berkas) yang memantau dari dalam server dan hanya melapor bila ada yang genting, jadi beban pemantauan tidak menumpuk di server AI Ops. Cocok juga untuk server di belakang NAT, karena agen hanya membuat koneksi keluar. Agen juga mengawasi hal keamanan: login SSH gagal berulang, akun atau kunci SSH baru, perubahan sudoers dan konfigurasi sshd, serta port baru yang terbuka.

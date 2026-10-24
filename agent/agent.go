@@ -298,6 +298,7 @@ func (a *Agent) Run(ctx context.Context) {
 	if err := a.Flush(ctx); err != nil {
 		a.logf.Printf("kirim: %v", err)
 	}
+	go a.patchLoop(ctx)
 	for {
 		select {
 		case <-ctx.Done():
