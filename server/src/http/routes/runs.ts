@@ -6,7 +6,7 @@ import { HttpError, bad, db } from '../../context.js';
 import { planFromDir } from '../../plan.js';
 import * as Servers from '../../servers.js';
 import * as Store from '../../store.js';
-import { TEMPLATES } from '../../templates.js';
+import { PLACEHOLDER, TEMPLATES } from '../../templates.js';
 import { handle, idParam, parse, strParam } from '../handle.js';
 
 const createBody = z.object({
@@ -22,6 +22,7 @@ function initialPlan(b: z.infer<typeof createBody>) {
   if (tpl) { steps = tpl.steps.map((title) => ({ title })); name ||= tpl.name; goal ||= tpl.goal; }
   else if (b.dir) { const plan = planFromDir(b.dir); steps = plan.steps; name ||= plan.name; stack = plan.stack; }
   if (!goal && !steps.length) throw bad('Isi tujuan, pilih templat, atau pilih folder proyek untuk rencana otomatis');
+  const open = goal.match(PLACEHOLDER); if (open) throw bad(`Tujuan masih berisi bagian yang harus Anda isi: ${open[0]}. Ganti dengan nilai sebenarnya (atau tulis "tidak ada").`);   // agen tidak boleh menebak domain, kata sandi, atau alamat
   return { steps, name: name || `Setup ${new Date().toLocaleDateString('id-ID')}`, goal: goal || `Terapkan rencana langkah untuk ${stack ?? 'proyek ini'}` };
 }
 

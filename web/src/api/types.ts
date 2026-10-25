@@ -93,7 +93,7 @@ export interface RunCommand {
 }
 export interface RunThought { ts: number; thought: string; command: string; done: boolean; summary: string }
 export interface RunDetail { run: Run; commands: RunCommand[]; thoughts: RunThought[] }
-export interface RunTemplate { id: string; name: string; goal: string; steps: string[] }
+export interface RunTemplate { id: string; name: string; category?: string; goal: string; steps: string[]; ask?: string[]; maxTurns?: number; tokenBudget?: number }
 export interface NewRun { serverId: number; name: string; goal: string; template: string | null; dir: string; maxTurns: number; tokenBudget: number }
 
 // ---------- model, token, pengaturan

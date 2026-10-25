@@ -1,6 +1,11 @@
 // Templat tujuan untuk proses setup. Agen tetap memakai kebijakan baca/ubah/blokir yang sama.
-export interface Template { id: string; name: string; goal: string; steps: string[] }
-export const TEMPLATES: Template[] = [
+import { SETUP_TEMPLATES } from './templates-setup.js';
+
+/** category mengelompokkan templat di halaman Setup; ask = hal yang harus diisi pengguna di bagian [ISI: ...] pada tujuan; maxTurns dan tokenBudget = usulan anggaran. */
+export interface Template { id: string; name: string; category: string; goal: string; steps: string[]; ask?: string[]; maxTurns?: number; tokenBudget?: number }
+
+/** Templat diagnosis dan tuning (baca saja atau perubahan kecil berbasis bukti). */
+const DIAGNOSIS: Array<Omit<Template, 'category'>> = [
   { id: 'diagnosis', name: 'Diagnosis awal (baca saja)', goal: 'Kumpulkan gambaran kondisi server: OS dan versi, CPU/RAM/swap/disk, layanan utama yang berjalan, log galat terbaru, dan dugaan penyebab lambat. Jangan mengubah apa pun.',
     steps: ['Identifikasi OS, CPU, RAM, disk, dan uptime', 'Daftar layanan berjalan dan port yang didengarkan', 'Periksa beban, tekanan I/O (PSI), dan swap', 'Baca log galat terbaru layanan utama', 'Ringkas temuan dan usulkan langkah berikutnya'] },
   { id: 'netdata', name: 'Pasang Netdata (monitoring mendalam, hanya lokal)', goal: 'Pasang Netdata dari repositori paket resmi OS (bukan skrip curl|sh), dengarkan hanya 127.0.0.1:19999 supaya tidak terbuka ke jaringan. Pastikan collector MySQL/Redis/Nginx/PHP-FPM yang terdeteksi aktif bila memungkinkan, lalu verifikasi endpoint /api/v1/alarms menjawab. Cadangkan setiap berkas konfigurasi sebelum diubah.',
@@ -14,3 +19,11 @@ export const TEMPLATES: Template[] = [
   { id: 'docker', name: 'Tinjau host Docker (baca saja)', goal: 'Daftar kontainer, citra, volume, dan pemakaian sumber daya. Cari kontainer yang restart terus, log yang membengkak, citra dan volume yatim yang memakan disk, serta kontainer tanpa batas memori. Hanya baca.',
     steps: ['Daftar kontainer berjalan dan status restart', 'Ukur pemakaian CPU/memori per kontainer', 'Periksa ukuran log kontainer dan volume', 'Cari citra dan volume yang tak terpakai', 'Ringkas temuan dan usulan pembersihan yang aman'] }
 ];
+
+const FOUNDATION = new Set(['netdata']);   // Netdata memasang sesuatu, jadi masuk Fondasi server
+/** Urutan kelompok di halaman Setup. */
+export const CATEGORIES = ['Diagnosis dan tuning', 'Fondasi server', 'Aplikasi', 'Data dan antrean', 'Jaringan dan TLS'] as const;
+export const PLACEHOLDER = /\[ISI:[^\]]*\]/;   // bagian tujuan yang belum diisi pengguna
+
+export const TEMPLATES: Template[] = [...DIAGNOSIS.map((t) => ({ ...t, category: FOUNDATION.has(t.id) ? 'Fondasi server' : 'Diagnosis dan tuning' })), ...SETUP_TEMPLATES]
+  .sort((a, b) => CATEGORIES.indexOf(a.category as never) - CATEGORIES.indexOf(b.category as never));
