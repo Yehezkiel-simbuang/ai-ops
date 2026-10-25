@@ -234,3 +234,19 @@ button.pg-card:focus-visible { outline: 2px solid var(--info); outline-offset: 2
   details.group > summary > b { flex: 1 1 0; min-width: 0; }
   details.group > summary > .lbl { flex-basis: 100%; margin-left: 22px; }
 }
+
+/* Dialog lebar dengan dua blok (mis. Setup > Proses baru): templat di kiri, pengaturan di kanan. */
+dialog.dlg.wide { width: min(1120px, calc(100vw - 32px)); }
+.setup-split { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.setup-block { border: 1px solid var(--line); border-radius: 6px; padding: 12px; background: var(--panel); min-width: 0; display: grid; gap: 10px; }
+.setup-block > h3 { margin: 0; font-size: .95rem; }
+@media (min-width: 900px) {
+  .setup-split { grid-template-columns: minmax(300px, .85fr) minmax(0, 1.25fr); }
+  .setup-pick { max-height: calc(90vh - 130px); overflow: auto; position: sticky; top: 0; }
+}
+button.tpl { display: grid; gap: 2px; text-align: left; width: 100%; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--panel); color: var(--ink); cursor: pointer; font: inherit; }
+button.tpl:hover { border-color: var(--accent); }
+button.tpl[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+button.tpl:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.tpl-chosen { display: grid; gap: 6px; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 5px 5px 0; }
+.tpl-chosen p { margin: 0; }
