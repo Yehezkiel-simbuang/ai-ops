@@ -35,6 +35,7 @@ function InstallGuide({ guide }: { guide: AgentGuide }) {
   return (
     <section className="sec">
       <h2><IconTerminal size={16} aria-hidden />Panduan pemasangan (jalankan sebagai root di server)</h2>
+      {(guide.warnings ?? []).map((w) => <Hint key={w} icon={IconAlert}>{w}</Hint>)}
       <Hint icon={IconAlert}>Secret hanya tampil sekali, di panduan ini. Simpan hanya di server. Setelah halaman ini ditutup, Anda perlu rotasi kunci untuk mendapatkannya lagi.</Hint>
       <textarea className="mono" readOnly value={guide.script} aria-label="Skrip pemasangan" style={{ minHeight: 340, width: '100%', fontSize: '.76rem' }} onFocus={(e) => e.currentTarget.select()} />
       <div className="row" style={{ marginTop: 8 }}><Button icon={IconCopy} onClick={copy}>Salin</Button></div>

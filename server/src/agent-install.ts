@@ -14,9 +14,19 @@ export function binaryInfo(binDir: string): Record<string, string> {
 
 const UNIT = '[Unit]\nDescription=AI Ops agent\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nExecStart=/usr/local/bin/aiops-agent -config /etc/aiops-agent.json\nRestart=always\nRestartSec=5\nStateDirectory=aiops-agent\n\n[Install]\nWantedBy=multi-user.target';
 
+/** Peringatan yang perlu dibaca sebelum menjalankan skrip: alamat yang tidak bisa dijangkau server lain, dan http tanpa enkripsi. */
+export function guideWarnings(publicUrl: string): string[] {
+  let u: URL; try { u = new URL(publicUrl); } catch { return []; }
+  const out: string[] = [];
+  const host = u.hostname.toLowerCase().replace('[', '').replace(']', '');
+  if (host === 'localhost' || host === '::1' || host === '0.0.0.0' || host.startsWith('127.')) out.push(`Alamat ${u.host} hanya berlaku di komputer AI Ops sendiri. Server lain tidak bisa mengunduh agen dari sini ("Failed to connect to localhost"). Atur PUBLIC_URL ke alamat yang bisa dijangkau server itu, misalnya http://192.168.1.10:4317, mulai ulang aplikasi, lalu buat panduan ini lagi.`);
+  if (u.protocol === 'http:') out.push('Alamat memakai http:// (tanpa enkripsi), jadi konfigurasi agen diberi insecure_http. Permintaan agen tetap bertanda tangan HMAC dan secret tidak ikut dikirim, tetapi isinya bisa dibaca di jaringan. Pakai hanya di jaringan lab yang tepercaya; untuk server sungguhan pakai https://.');
+  return out;
+}
+
 export function installGuide(publicUrl: string, cred: { keyId: string; secret: string }, opt: { exec: boolean; services: string[] }) {
   const config = {
-    server_url: publicUrl, key_id: cred.keyId, secret: cred.secret, interval_seconds: 30, heartbeat_seconds: 60, allow_exec: opt.exec,
+    server_url: publicUrl, ...(publicUrl.startsWith('http://') ? { insecure_http: true } : {}), key_id: cred.keyId, secret: cred.secret, interval_seconds: 30, heartbeat_seconds: 60, allow_exec: opt.exec,
     thresholds: { load_per_core_crit: 3, mem_avail_pct_crit: 5, disk_pct_crit: 95, io_psi_crit: 50, disk_path: '/' }, services: opt.services,
     security: { enabled: true, ssh_fail_crit: 30, ssh_fail_window_seconds: 600, root_login_crit: false, hold_minutes: 120 }
   };

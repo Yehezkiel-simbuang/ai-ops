@@ -2,7 +2,7 @@
 import type { Request } from 'express';
 import { Router } from 'express';
 import { z } from 'zod';
-import { binaryInfo, installGuide } from '../../agent-install.js';
+import { binaryInfo, guideWarnings, installGuide } from '../../agent-install.js';
 import * as Agents from '../../agents.js';
 import type { Config } from '../../config.js';
 import { HttpError } from '../../context.js';
@@ -24,7 +24,7 @@ export function agentAdminRoutes(cfg: Config, binDir: string): Router {
   }));
   r.post('/servers/:id/agent', handle(async (req) => {
     const id = idParam(req), s = await serverOr404(id), b = parse(issueBody, req.body), cred = await Agents.issue(id);
-    return { keyId: cred.keyId, rotated: cred.rotated, ...installGuide(publicUrl(req), cred, { exec: !!b.exec, services: s.services ? s.services.split(',') : [] }), note: 'Secret hanya ditampilkan sekali. Simpan di server saja.' };
+    return { keyId: cred.keyId, rotated: cred.rotated, warnings: guideWarnings(publicUrl(req)), ...installGuide(publicUrl(req), cred, { exec: !!b.exec, services: s.services ? s.services.split(',') : [] }), note: 'Secret hanya ditampilkan sekali. Simpan di server saja.' };
   }));
   r.delete('/servers/:id/agent', handle(async (req) => { await Agents.remove(idParam(req)); return { ok: true }; }));
   return r;

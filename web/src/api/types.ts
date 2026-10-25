@@ -57,7 +57,7 @@ export interface PatchPkg { name: string; source?: string; old: string; new: str
 export interface PatchDetail { name: string; os: string; reported: number | null; ecosystem: string | null; supported: boolean; matched_at: number | null; kev_at: number | null; total: number; packages: PatchPkg[] }
 export interface PatchOverview { rows: PatchRow[]; without_agent: number }
 export interface AgentOverview { agent: AgentStatus | null; path: ExecPath; binaries: string[] }
-export interface AgentGuide { keyId: string; rotated: boolean; script: string; configText: string; note: string }
+export interface AgentGuide { keyId: string; rotated: boolean; script: string; configText: string; note: string; warnings?: string[] }
 
 export type RecStatus = 'proposed' | 'approved' | 'executing' | 'done' | 'failed' | 'rejected' | 'superseded';
 export interface Incident {

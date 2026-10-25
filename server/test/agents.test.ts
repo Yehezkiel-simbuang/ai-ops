@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as Agents from '../src/agents.js';
-import { installGuide } from '../src/agent-install.js';
+import { guideWarnings, installGuide } from '../src/agent-install.js';
 import * as Incidents from '../src/incidents.js';
 import * as Safety from '../src/safety.js';
 import * as Servers from '../src/servers.js';
@@ -343,5 +343,17 @@ describe('kondisi server tanpa pemantauan berkala', () => {
     await h.db.exec("INSERT INTO alerts(server_id,ts,level,key,title) VALUES($1,$2,'major','k:major','sedang')", [id, Date.now()]); expect(await status()).toBe('peringatan'); expect(await overviewStatus()).toBe('peringatan');
     await h.db.exec("UPDATE agents SET online=false WHERE server_id=$1", [id]); expect(await status()).toBe('tidak terjangkau');
     expect(((await h.call('GET', `/api/servers/${id}/monitor`)).json.server as { last_status: string }).last_status).toBe('tidak terjangkau');   // halaman Monitor memakai kondisi yang sama
+  });
+});
+
+describe('panduan pemasangan: alamat yang tidak bisa dijangkau server lain', () => {
+  const cred = { keyId: 'ak_x', secret: 'x'.repeat(40) };
+  it('alamat localhost diperingatkan; alamat LAN http diperingatkan soal enkripsi dan agen diberi insecure_http; https bersih', () => {
+    expect(guideWarnings('http://localhost:4317').join(' ')).toMatch(/hanya berlaku di komputer AI Ops sendiri.*PUBLIC_URL/);
+    for (const u of ['http://127.0.0.1:4317', 'http://[::1]:4317', 'http://0.0.0.0:4317']) expect(guideWarnings(u).join(' '), u).toMatch(/hanya berlaku di komputer/);
+    const lan = guideWarnings('http://192.168.1.10:4317'); expect(lan).toHaveLength(1); expect(lan[0]).toMatch(/tanpa enkripsi/);
+    expect(guideWarnings('https://aiops.contoh.com')).toEqual([]); expect(guideWarnings('bukan-url')).toEqual([]);
+    expect(installGuide('http://192.168.1.10:4317', cred, { exec: false, services: [] }).config).toMatchObject({ server_url: 'http://192.168.1.10:4317', insecure_http: true });
+    expect(installGuide('https://aiops.contoh.com', cred, { exec: false, services: [] }).config).not.toHaveProperty('insecure_http');
   });
 });
