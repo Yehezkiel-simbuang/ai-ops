@@ -11,22 +11,25 @@ import { DataTable } from '@/components/ui/DataTable';
 import { Hint, Note, PageHead, Section } from '@/components/ui/Layout';
 import { IconAlert, IconBan, IconCheck, IconCopy, IconGauge, IconPulse, IconSpark, IconTrash } from '@/components/icons';
 import { del, post } from '@/lib/api';
-import { dateTime } from '@/lib/format';
+import { ago, dateTime } from '@/lib/format';
 import { peakVus, totalSeconds } from './form';
 import { P95Chart, ThroughputChart } from './StageCharts';
 import { STATUS_BADGE } from './LoadTestsPage';
 import { isActive, loadQ } from './queries';
-import type { LoadTestDetail } from './types';
+import type { AiExplanation, LoadTestDetail } from './types';
 
 const ms = (v: number) => `${Math.round(v)} ms`;
 
-function AiExplain({ id }: { id: number }) {
-  const [out, setOut] = useState<{ text: string; model: string } | null>(null);
-  const ask = useAction(() => post<{ text: string; model: string }>(`/api/loadtests/${id}/explain`), { onSuccess: setOut });
+/** Penjelasan dikerjakan di server dan disimpan di uji ini: pindah halaman atau tab tidak membatalkannya, dan hasilnya tetap ada saat kembali. */
+function AiExplain({ id, ai }: { id: number; ai: AiExplanation | null }) {
+  const ask = useAction(() => post(`/api/loadtests/${id}/explain`), { invalidate: [['loadtests', 'detail', id]] });
+  const running = ai?.status === 'running' || ask.isPending;
   return (
     <Section title="Penjelasan AI" icon={IconSpark}>
-      <Button icon={IconSpark} onClick={() => ask.mutateAsync()}>{out ? 'Minta ulang' : 'Jelaskan hasil ini'}</Button>
-      {out && <><div className="lbl" style={{ margin: '8px 0 4px' }}>Ditulis AI ({out.model}) dari angka di atas; ini tafsiran, bukan pengukuran. Verifikasi dengan metrik server.</div><p style={{ whiteSpace: 'pre-wrap' }}>{out.text}</p></>}
+      <Button icon={IconSpark} disabled={running} onClick={() => ask.mutateAsync()}>{running ? 'Sedang menjelaskan...' : ai?.status === 'done' ? 'Minta ulang' : ai?.status === 'failed' ? 'Coba lagi' : 'Jelaskan hasil ini'}</Button>
+      {running && <p className="lbl" role="status" style={{ marginTop: 8 }}>Dikerjakan di server. Anda boleh pindah halaman atau tab; hasilnya tersimpan dan muncul di sini.</p>}
+      {ai?.status === 'failed' && <Hint icon={IconAlert}><span>Penjelasan gagal dibuat: {ai.error}</span></Hint>}
+      {ai?.status === 'done' && <><div className="lbl" style={{ margin: '8px 0 4px' }}>Ditulis AI ({ai.model}) dari angka di atas{ai.ts ? `, ${ago(ai.ts)}` : ''}; ini tafsiran, bukan pengukuran. Verifikasi dengan metrik server.</div><p style={{ whiteSpace: 'pre-wrap' }}>{ai.text}</p></>}
     </Section>
   );
 }
@@ -49,7 +52,7 @@ function Results({ t }: { t: LoadTestDetail }) {
             <span key="c">{Math.round(s.genCpu * 100)}%{!s.valid && <> <Badge tone="warn">tidak murni</Badge></>}</span>
           ])} />
       </Section>
-      {t.status === 'done' && t.stages.length > 0 && <AiExplain id={t.id} />}
+      {t.status === 'done' && t.stages.length > 0 && <AiExplain id={t.id} ai={t.ai} />}
       {scrapeLabels.length > 0 && (
         <Section title="Metrik server uji per tahap (rata-rata / puncak)" icon={IconPulse}>
           <DataTable textCols={1} heads={['Tahap (pengguna)', ...scrapeLabels]} empty=""

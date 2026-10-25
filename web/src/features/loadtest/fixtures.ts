@@ -19,11 +19,11 @@ const withKnee: Analysis = {
   verdict: { tone: 'warn', title: 'Sehat sampai 20 pengguna (≈ 17.0 req/dtk), mulai tidak sehat di 80', text: 'Tahap 3: p95 900 ms melebihi batas 500 ms.' }
 };
 
-export const draft = (): LoadTestDetail => { const { stages, ...t } = test(); return { ...t, plan: stages, stages: [], analysis: none }; };
+export const draft = (): LoadTestDetail => { const { stages, ...t } = test(); return { ...t, plan: stages, stages: [], analysis: none, ai: null }; };
 export const finished = (): LoadTestDetail => {
   const { stages, ...t } = test({ status: 'done', approved_by: 'admin', started: Date.now() - 50_000, finished: Date.now() - 10_000, scrape: [{ label: 'pool', url: 'http://10.0.0.5:8080/metrics', metric: 'pool_in_use' }], runner: { k6: 'k6 v0.54.0', cpus: 1, version: '1.0.0' } });
   return {
-    ...t, plan: stages, analysis: withKnee,
+    ...t, plan: stages, analysis: withKnee, ai: null,
     stages: [stage(0, 5, 4.5, 80, { scraped: { pool: { avg: 1, max: 2, last: 1 } } }), stage(1, 20, 17, 200, { scraped: { pool: { avg: 2, max: 4, last: 3 } } }), stage(2, 80, 40, 900, { genCpu: 0.9, valid: false, scraped: { pool: { avg: 7, max: 8, last: 8 } } })]
   };
 };

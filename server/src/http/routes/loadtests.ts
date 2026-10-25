@@ -3,7 +3,7 @@ import { Router } from 'express';
 import type { Config } from '../../config.js';
 import { bad, metaGet } from '../../context.js';
 import * as Store from '../../loadtest/store.js';
-import { explain } from '../../loadtest/explain.js';
+import { start } from '../../loadtest/explain.js';
 import { createSchema } from '../../loadtest/schema.js';
 import { handle, idParam, parse } from '../handle.js';
 
@@ -20,7 +20,7 @@ export function loadtestRoutes(cfg: Config): Router {
   r.delete('/loadtests/:id', handle(async (req) => { await Store.remove(idParam(req)); return { ok: true }; }));
   r.post('/loadtests/:id/run', handle((req) => Store.queue(idParam(req), req.user!.username)));
   r.post('/loadtests/:id/cancel', handle(async (req) => { await Store.cancel(idParam(req), req.user!.username); return { ok: true }; }));
-  r.post('/loadtests/:id/explain', handle((req) => explain(idParam(req))));
+  r.post('/loadtests/:id/explain', handle((req) => start(idParam(req))));   // mulai di latar belakang; hasilnya ikut di detail uji (ai)
   r.post('/loadtests/:id/duplicate', handle((req) => Store.duplicate(idParam(req), req.user!.username)));
   return r;
 }

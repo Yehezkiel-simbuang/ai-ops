@@ -98,12 +98,26 @@ describe('LoadTestDetailPage', () => {
     expect(screen.getByText('Metrik server uji per tahap (rata-rata / puncak)')).toBeInTheDocument(); expect(screen.getByText('7.0 / 8.0')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Jalankan lagi' })).toBeInTheDocument(); expect(screen.queryByRole('button', { name: 'Setujui dan jalankan' })).not.toBeInTheDocument();
   });
-  it('penjelasan AI: diminta lewat tombol dan diberi label ditulis AI', async () => {
-    const calls = mockApi({ 'GET /api/loadtests/5': { body: finished() }, 'POST /api/loadtests/5/explain': { body: { text: 'Dugaan: pool DB jenuh.', model: 'm-murah' } } });
-    detail('/uji-beban/5');
+  const aiDone = { status: 'done' as const, text: 'Dugaan: pool DB jenuh.', model: 'm-murah', error: '', ts: Date.now() - 60_000 };
+  it('penjelasan AI: tombol memulai pekerjaan di server, menunjukkan sedang berjalan dan bahwa boleh pindah halaman, lalu hasil muncul sendiri', async () => {
+    let ai: unknown = null;
+    const calls = mockApi({ 'GET /api/loadtests/5': () => ({ body: { ...finished(), ai } }), 'POST /api/loadtests/5/explain': () => { ai = { status: 'running', text: '', model: '', error: '', ts: Date.now() }; return { body: { status: 'running' } }; } });
+    const { client } = detail('/uji-beban/5');
     await userEvent.click(await screen.findByRole('button', { name: 'Jelaskan hasil ini' }));
-    expect(await screen.findByText(/pool DB jenuh/)).toBeInTheDocument(); expect(screen.getByText(/Ditulis AI .m-murah./)).toBeInTheDocument();
-    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/loadtests/5/explain')).toBe(true);
+    expect(await screen.findByRole('button', { name: 'Sedang menjelaskan...' })).toBeDisabled(); expect(screen.getByText(/boleh pindah halaman atau tab/)).toBeInTheDocument();
+    expect(calls.filter((c) => c.method === 'POST' && c.path === '/api/loadtests/5/explain')).toHaveLength(1);
+    ai = aiDone; await client.invalidateQueries({ queryKey: ['loadtests', 'detail', 5] });   // server selesai; polling mengambilnya
+    expect(await screen.findByText(/pool DB jenuh/)).toBeInTheDocument(); expect(screen.getByText(/Ditulis AI .m-murah./)).toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Minta ulang' })).toBeEnabled();
+  });
+  it('penjelasan AI: yang sudah jadi di server langsung tampil saat halaman dibuka lagi, tanpa meminta ulang', async () => {
+    const calls = mockApi({ 'GET /api/loadtests/5': { body: { ...finished(), ai: aiDone } } });
+    detail('/uji-beban/5');
+    expect(await screen.findByText(/pool DB jenuh/)).toBeInTheDocument(); expect(calls.some((c) => c.method === 'POST')).toBe(false);
+  });
+  it('penjelasan AI: yang gagal menampilkan alasannya dan bisa dicoba lagi', async () => {
+    mockApi({ 'GET /api/loadtests/5': { body: { ...finished(), ai: { status: 'failed', text: '', model: '', error: 'model tidak menjawab', ts: Date.now() } } } });
+    detail('/uji-beban/5');
+    expect(await screen.findByText(/Penjelasan gagal dibuat: model tidak menjawab/)).toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Coba lagi' })).toBeEnabled();
   });
   it('berjalan: progres tahap dan tombol batalkan; menekan batalkan mengirim permintaan', async () => {
     const calls = mockApi({ 'GET /api/loadtests/5': { body: running() }, 'POST /api/loadtests/5/cancel': { body: { ok: true } } });

@@ -23,7 +23,9 @@ export interface Analysis {
 }
 export type LoadTestListItem = LoadTest & { stageCount: number; analysis: Analysis };
 /** Detail: `plan` = rencana tahap; `stages` = hasil yang sudah dilaporkan runner. */
-export type LoadTestDetail = Omit<LoadTest, 'stages'> & { plan: LoadStage[]; stages: StageResult[]; analysis: Analysis };
+/** Penjelasan AI dikerjakan di server dan disimpan; null = belum pernah diminta. */
+export interface AiExplanation { status: 'running' | 'done' | 'failed'; text: string; model: string; error: string; ts: number | null }
+export type LoadTestDetail = Omit<LoadTest, 'stages'> & { plan: LoadStage[]; stages: StageResult[]; analysis: Analysis; ai: AiExplanation | null };
 
 export interface LoadTestStatus { enabled: boolean; allowedHosts: string[]; runner: { online: boolean; lastSeen: number | null; info: { k6: string; cpus: number; version: string } | null } }
 

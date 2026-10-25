@@ -127,9 +127,23 @@ describe('uji beban: API, persetujuan, dan runner', () => {
     // penjelasan AI: ditolak tanpa model; dengan model, prompt hanya berisi angka dan tanpa nilai header rahasia
     expect((await h.call('POST', `/api/loadtests/${created.id}/explain`)).status).toBe(400);
     await h.call('POST', '/api/provider', { id: 'lain', type: 'openai', baseUrl: 'http://127.0.0.1:1', apiKey: 'k' }); await h.call('POST', '/api/role', { role: 'monitor', provider: 'lain', model: 'm-murah' });
-    let seen = ''; Explain.configure({ llm: (async (_r: string, req: { messages: Array<{ content: string }> }) => { seen = req.messages[0]!.content; return { text: 'Dugaan: pool DB. Keyakinan sedang.', usage: { input: 10, output: 5 } }; }) as never });
-    const ex = await h.call('POST', `/api/loadtests/${created.id}/explain`); expect(ex.status).toBe(200); expect(ex.json).toMatchObject({ text: expect.stringContaining('pool DB'), role: 'monitor', model: 'm-murah' });
+    let seen = '', calls = 0, release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { release = r; });   // menahan model supaya keadaan "sedang berjalan" bisa diperiksa
+    Explain.configure({ llm: (async (_r: string, req: { messages: Array<{ content: string }> }) => { calls++; seen = req.messages[0]!.content; await gate; return { text: 'Dugaan: pool DB. Keyakinan sedang.', usage: { input: 10, output: 5 } }; }) as never });
+    // diminta: langsung kembali "running"; penjelasan dikerjakan di server dan disimpan, jadi tidak hilang bila pengguna pindah halaman
+    const ex = await h.call('POST', `/api/loadtests/${created.id}/explain`); expect(ex.status).toBe(200); expect(ex.json).toEqual({ status: 'running' });
+    expect((await h.call('GET', `/api/loadtests/${created.id}`)).json.ai).toMatchObject({ status: 'running', text: '' });
+    expect((await h.call('POST', `/api/loadtests/${created.id}/explain`)).json).toEqual({ status: 'running' });   // klik kedua tidak membayar model dua kali
+    release(); await Explain.settled(); expect(calls).toBe(1);
+    expect((await h.call('GET', `/api/loadtests/${created.id}`)).json.ai).toMatchObject({ status: 'done', text: expect.stringContaining('pool DB'), model: 'm-murah', error: '' });
     expect(seen).toContain('tahap 2: 20 pengguna'); expect(seen).not.toContain('staging-token-rahasia');
+    // gagal: galatnya tersimpan dan terlihat, bukan hilang; bisa diminta lagi
+    Explain.configure({ llm: (async () => { throw new Error('model tidak menjawab'); }) as never });
+    await h.call('POST', `/api/loadtests/${created.id}/explain`); await Explain.settled();
+    expect((await h.call('GET', `/api/loadtests/${created.id}`)).json.ai).toMatchObject({ status: 'failed', error: expect.stringContaining('model tidak menjawab') });
+    // terhenti di tengah jalan (mis. aplikasi dimulai ulang): lewat batas waktu dianggap gagal, bukan "sedang berjalan" selamanya
+    await h.db.exec("UPDATE load_tests SET ai_status='running', ai_ts=$1 WHERE id=$2", [Date.now() - 10 * 60_000, created.id]);
+    expect((await h.call('GET', `/api/loadtests/${created.id}`)).json.ai).toMatchObject({ status: 'failed', error: expect.stringContaining('Terhenti') });
   });
 
   it('pembatalan: uji antre langsung batal; uji berjalan memberi tahu runner lewat balasan', async () => {

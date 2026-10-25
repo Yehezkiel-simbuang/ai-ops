@@ -1,7 +1,7 @@
 // Penjelasan hasil uji beban oleh model. Model hanya boleh menafsirkan angka yang diberikan; analisis deterministik
 // (lutut, tahap sehat) tetap sumber kebenaran dan ikut dikirim ke pengguna sebagai pembanding.
 import { analystRole } from '../ai.js';
-import { bad } from '../context.js';
+import { bad, db, log } from '../context.js';
 import { forRole, type RoleChat } from '../llm.js';
 import * as Store from './store.js';
 
@@ -17,14 +17,37 @@ export function evidence(t: Detail): string {
   return `${head}\n\nHasil per tahap:\n${rows.join('\n')}\n\nAnalisis otomatis: ${t.analysis.verdict.title}. ${t.analysis.verdict.text}`;
 }
 
-export async function explain(id: number): Promise<{ text: string; role: string; model: string }> {
+const running = new Set<Promise<void>>();
+/** Untuk uji: tunggu penjelasan di latar belakang selesai. */
+export const settled = async (): Promise<void> => { while (running.size) await Promise.all([...running]); };
+
+/** Mulai penjelasan di server dan segera kembali. Hasilnya disimpan di uji itu, jadi tetap selesai walau pengguna pindah halaman atau menutup tab. */
+export async function start(id: number): Promise<{ status: 'running' }> {
   const t = await Store.get(id);
   if (t.status !== 'done' || !t.stages.length) throw bad('Penjelasan hanya tersedia untuk uji yang sudah selesai');
-  const { role, model } = await analystRole();
+  if (t.ai?.status === 'running') return { status: 'running' };   // sudah berjalan: jangan membayar dua kali
+  const { role, model } = await analystRole();   // belum ada model = galat langsung ke pengguna, bukan galat yang tersimpan
+  await db().exec("UPDATE load_tests SET ai_status='running', ai_error='', ai_ts=$1 WHERE id=$2", [Date.now(), id]);
+  const p: Promise<void> = generate(id, t, role, model).finally(() => { running.delete(p); });
+  running.add(p);
+  return { status: 'running' };
+}
+
+async function generate(id: number, t: Detail, role: string, model: string): Promise<void> {
+  try {
+    const text = await ask(t, role);
+    await db().exec("UPDATE load_tests SET ai_status='done', ai_text=$1, ai_model=$2, ai_error='', ai_ts=$3 WHERE id=$4", [text, model, Date.now(), id]);
+  } catch (e) {
+    log().warn({ err: (e as Error).message, id }, 'penjelasan uji beban gagal');
+    await db().exec("UPDATE load_tests SET ai_status='failed', ai_error=$1, ai_ts=$2 WHERE id=$3", [String((e as Error).message).slice(0, 300), Date.now(), id]);
+  }
+}
+
+async function ask(t: Detail, role: string): Promise<string> {
   const r = await dep.llm(role, {
     system: 'Kamu insinyur performa. Bahasa Indonesia, ringkas. Hanya gunakan angka yang diberikan; jangan mengarang metrik, jangan menyebut penyebab pasti bila bukti tidak cukup, dan nyatakan apa yang belum bisa disimpulkan. Tahap bertanda TIDAK MURNI jangan dijadikan bukti kelemahan server.',
     messages: [{ role: 'user', content: `${evidence(t)}\n\nJelaskan: (1) di mana kemungkinan leher botol dan bukti angkanya, (2) seberapa yakin (tinggi/sedang/rendah) beserta alasannya, (3) satu atau dua percobaan lanjutan yang paling berguna.` }],
     maxTokens: 700
   });
-  return { text: r.text.trim(), role, model };
+  return r.text.trim();
 }

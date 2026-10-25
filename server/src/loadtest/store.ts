@@ -13,12 +13,19 @@ export interface TestRow {
   id: number; name: string; target: string; allow_public: boolean; scenario: Scenario; headers_enc: string; stages: LoadStage[]; criteria: Criteria; scrape: Array<{ label: string; url: string; metric: string }>;
   status: TestStatus; cancel_requested: boolean; error: string; runner: { k6: string; cpus: number; version: string } | null; approved_by: string;
   created: number; started: number | null; finished: number | null; heartbeat: number | null; setup: SetupSummary | null;
+  ai_status: '' | 'running' | 'done' | 'failed'; ai_text: string; ai_model: string; ai_error: string; ai_ts: number | null;
 }
 export interface SetupSummary { name: string; services: Array<{ name: string; image: string }>; limits: string[] }
 export interface StageDb extends StageRow { reqs: number; p50: number; p99: number; scraped: Record<string, { avg: number; max: number; last: number }>; started: number; ended: number }
 
 /** Bentuk untuk UI: tanpa header terenkripsi. */
-const view = (t: TestRow) => { const { headers_enc: _h, ...rest } = t; return rest; };
+/** Penjelasan yang 'running' lebih dari ini dianggap terhenti (mis. aplikasi dimulai ulang di tengah jalan). */
+export const AI_STALE_MS = 3 * 60_000;
+const view = (t: TestRow) => {
+  const { headers_enc: _h, ai_status, ai_text, ai_model, ai_error, ai_ts, ...rest } = t;
+  const stale = ai_status === 'running' && Date.now() - (ai_ts ?? 0) > AI_STALE_MS;
+  return { ...rest, ai: ai_status ? { status: stale ? 'failed' as const : ai_status, text: ai_text, model: ai_model, error: stale ? 'Terhenti sebelum selesai. Coba minta lagi.' : ai_error, ts: ai_ts } : null };
+};
 
 const stageRows = (test_id: number) => db().query<StageDb & { err_pct: number; gen_cpu: number }>('SELECT idx, vus, seconds, reqs, rps, p50, p95, p99, err_pct, gen_cpu, valid, scraped, started, ended FROM load_stages WHERE test_id=$1 ORDER BY idx', [test_id])
   .then((rs) => rs.map((r) => ({ ...r, errPct: r.err_pct, genCpu: r.gen_cpu })));
