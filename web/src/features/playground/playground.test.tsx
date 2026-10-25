@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import { mockApi, renderWithProviders } from '@/test/utils';
-import { PlaygroundEditorPage } from './PlaygroundEditorPage';
+import { NAME_RE, PlaygroundEditorPage } from './PlaygroundEditorPage';
 import { PlaygroundPage, deploySummary } from './PlaygroundPage';
 import type { ComposeAnalysis, PlaygroundDeploy } from './types';
 
@@ -44,8 +44,8 @@ describe('PlaygroundPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /Web sederhana [+] Redis/ }));
     expect(screen.getByRole('button', { name: /Web sederhana [+] Redis/ })).toHaveAttribute('aria-pressed', 'true');
     const aside = screen.getByLabelText('Ringkasan'); expect(await within(aside).findByText('valid')).toBeInTheDocument(); expect(within(aside).getByText('nginx:1.27')).toBeInTheDocument(); expect(within(aside).getByLabelText('Alur lalu lintas')).toHaveTextContent(':8080 web');
-    expect((screen.getByPlaceholderText('mis. web + redis') as HTMLInputElement).value).toBe('Web sederhana + Redis');   // nama terisi dari pilihan
-    await userEvent.clear(screen.getByPlaceholderText('mis. web + redis')); await userEvent.type(screen.getByPlaceholderText('mis. web + redis'), 'uji-1');
+    expect((screen.getByPlaceholderText('mis. web-redis-uji') as HTMLInputElement).value).toBe('Web dan Redis');   // nama terisi dari pilihan, tanpa tanda yang ditolak server
+    await userEvent.clear(screen.getByPlaceholderText('mis. web-redis-uji')); await userEvent.type(screen.getByPlaceholderText('mis. web-redis-uji'), 'uji-1');
     await waitFor(() => expect(save).toBeEnabled());
     const box = screen.getByLabelText('Isi Compose'); await userEvent.type(box, ' privileged');
     expect(await within(aside).findByText(/tidak diizinkan/)).toBeInTheDocument(); await waitFor(() => expect(save).toBeDisabled());
@@ -108,5 +108,26 @@ describe('PlaygroundPage', () => {
     renderWithProviders(<PlaygroundPage />);
     await userEvent.click(await screen.findByRole('button', { name: 'Log' }));
     expect(await screen.findByText(/pull access denied/)).toBeInTheDocument();
+  });
+});
+
+describe('nama susunan', () => {
+  it('nama bawaan dari setiap contoh lolos aturan server, dan nama yang ditolak server ditandai sebelum Simpan', async () => {
+    const { SAMPLES } = await import('./samples');
+    for (const s of SAMPLES) expect(NAME_RE.test(s.name), s.name).toBe(true);
+    for (const ok of ['web-redis-uji', 'Uji 1.0', 'a_b']) expect(NAME_RE.test(ok), ok).toBe(true);
+    for (const bad of ['web + redis', 'a/b', 'uji!']) expect(NAME_RE.test(bad), bad).toBe(false);
+  });
+
+  it('mengetik nama dengan tanda yang ditolak menampilkan pesan dan mengunci Simpan', async () => {
+    mockApi({ 'GET /api/playground': { body: [] }, 'GET /api/servers': { body: [server()] }, 'POST /api/playground/analyze': { body: analysis() } });
+    renderWithProviders(<Routes><Route path="/playground/:id" element={<PlaygroundEditorPage />} /></Routes>, { route: '/playground/baru' });
+    await userEvent.click(await screen.findByRole('button', { name: /Web sederhana [+] Redis/ }));
+    const input = screen.getByPlaceholderText('mis. web-redis-uji'), save = screen.getByRole('button', { name: 'Simpan' });
+    await waitFor(() => expect(save).toBeEnabled());
+    await userEvent.clear(input); await userEvent.type(input, 'web + redis');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nama hanya boleh huruf, angka, spasi, titik, minus, dan garis bawah'); expect(save).toBeDisabled();
+    await userEvent.clear(input); await userEvent.type(input, 'web dan redis');
+    await waitFor(() => expect(save).toBeEnabled()); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

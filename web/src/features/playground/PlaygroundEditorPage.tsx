@@ -21,6 +21,9 @@ import type { ComposeAnalysis, NewPlayground, PlaygroundDeploy } from './types';
 
 type Start = string | 'builder' | 'yaml' | null;
 
+/** Sama dengan aturan di server (service.ts); diperiksa di sini supaya kesalahannya terlihat sebelum Simpan. */
+export const NAME_RE = /^[\w .-]+$/;
+
 function Step({ n, title, hint, children }: { n: number; title: string; hint?: string; children: React.ReactNode }) {
   return (
     <section className="pg-step">
@@ -88,9 +91,10 @@ function Composer({ servers, editing }: { servers: Server[]; editing: Playground
   const save = useAction(() => (editing ? put(`/api/playground/${editing.id}`, { name: f.name, compose: f.compose, health_path: f.health_path, target_port: f.target_port }) : post('/api/playground', f)), {
     success: 'Disimpan. Tekan Pasang di daftar untuk memasangnya di server.', invalidate: [['playground']], onSuccess: done
   });
-  const ready = f.name.trim() !== '' && f.compose.trim() !== '' && f.server_id > 0 && !!a && a.problems.length === 0 && debounced === f.compose;
+  const nameBad = f.name.trim() !== '' && !NAME_RE.test(f.name.trim());
+  const ready = f.name.trim() !== '' && !nameBad && f.compose.trim() !== '' && f.server_id > 0 && !!a && a.problems.length === 0 && debounced === f.compose;
   const sample = SAMPLES.find((s) => s.id === start);
-  const missing = !f.compose.trim() ? 'Pilih bahan awal atau isi docker-compose.yml.' : !f.name.trim() ? 'Beri nama susunan.' : a && a.problems.length ? 'Perbaiki masalah di atas.' : '';
+  const missing = !f.compose.trim() ? 'Pilih bahan awal atau isi docker-compose.yml.' : !f.name.trim() ? 'Beri nama susunan.' : nameBad ? 'Perbaiki nama susunan.' : a && a.problems.length ? 'Perbaiki masalah di atas.' : '';
 
   return (
     <form className="pg-layout" onSubmit={(e) => { e.preventDefault(); if (ready) void save.mutateAsync(); }}>
@@ -98,7 +102,7 @@ function Composer({ servers, editing }: { servers: Server[]; editing: Playground
         {!editing && (
           <Step n={1} title="Pilih bahan awal" hint="Tidak perlu paham Docker untuk mulai. Pilih contoh, rakit dari image aplikasi Anda, atau tempel docker-compose.yml sendiri. Isinya bisa diubah di langkah berikutnya.">
             <div className="pg-cards">
-              {SAMPLES.map((s) => <Choice key={s.id} label={s.label} description={s.description} parts={s.parts} selected={start === s.id} onPick={() => { setStart(s.id); setBuilt(false); setF((x) => ({ ...x, compose: s.compose, health_path: s.health, name: x.name || s.label })); }} />)}
+              {SAMPLES.map((s) => <Choice key={s.id} label={s.label} description={s.description} parts={s.parts} selected={start === s.id} onPick={() => { setStart(s.id); setBuilt(false); setF((x) => ({ ...x, compose: s.compose, health_path: s.health, name: x.name || s.name })); }} />)}
               <Choice label="Rakit dari aplikasi saya" description="Punya image Docker sendiri? Tambahkan database, Redis, beberapa replika, dan load balancer lewat formulir." selected={start === 'builder'} onPick={() => { setStart('builder'); setBuilt(false); setF((x) => ({ ...x, compose: '' })); }} />
               <Choice label="Tempel YAML sendiri" description="Sudah punya docker-compose.yml. Aplikasi memeriksa keamanannya sebelum dipasang." selected={start === 'yaml'} onPick={() => { setStart('yaml'); setBuilt(false); }} />
             </div>
@@ -120,7 +124,7 @@ function Composer({ servers, editing }: { servers: Server[]; editing: Playground
         <Step n={editing ? 2 : 3} title="Server dan nama" hint="Server harus yang ditandai playground (server uji, bukan produksi).">
           <div className="cols tight">
             <Field label="Server playground"><select aria-label="Server playground" disabled={!!editing} value={f.server_id} onChange={(e) => setF({ ...f, server_id: Number(e.target.value) })}>{servers.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.host})</option>)}</select></Field>
-            <Field label="Nama susunan"><input placeholder="mis. web + redis" maxLength={60} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+            <Field label="Nama susunan" hint={nameBad ? undefined : 'Huruf, angka, spasi, titik, minus, dan garis bawah.'}><input placeholder="mis. web-redis-uji" maxLength={60} aria-invalid={nameBad} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />{nameBad && <p className="lbl" role="alert" style={{ color: 'var(--bad)' }}>Nama hanya boleh huruf, angka, spasi, titik, minus, dan garis bawah. Ganti tanda lain, misalnya + menjadi "dan".</p>}</Field>
           </div>
           <Fold title="Pengaturan uji (opsional)" hint="Cek kesehatan dan port target uji beban">
             <div className="cols tight">
