@@ -104,6 +104,23 @@ describe('rencana patch', () => {
     expect((await h.call('POST', `/api/servers/${sid}/patch-plan`, { packages: ['curl'] })).status).toBe(200);
   });
 
+  it('daftar menyadari bahwa patch diterapkan SESUDAH laporan agen, dan meminta laporan ulang menyalakan penanda untuk detak jantung berikutnya', async () => {
+    await agent('/agent/v1/patch', FACTS());   // laporan agen terbaru
+    const id = (await h.call('POST', `/api/servers/${sid}/patch-plan`, { packages: ['curl'] })).json.id;
+    const row = async () => (await h.call('GET', '/api/maintenance/patching')).json.rows.find((r: any) => r.server_id === sid);
+    const det = async () => (await h.call('GET', `/api/servers/${sid}/patching`)).json;
+    await h.db.exec("UPDATE recommendations SET status='done', updated=$1 WHERE id=$2", [Date.now() + 5000, id]);   // patch selesai setelah laporan
+    expect((await row()).patched_at).toBeGreaterThan(0); expect((await det()).patched_at).toBeGreaterThan(0);
+    await agent('/agent/v1/patch', FACTS());   // agen melapor ulang: daftar kembali segar
+    await h.db.exec('UPDATE agents SET patch_ts=$1 WHERE server_id=$2', [Date.now() + 10_000, sid]);
+    expect((await row()).patched_at).toBeNull(); expect((await det()).patched_at).toBeNull();
+    // minta lapor ulang: penanda dipakai sekali oleh detak jantung
+    const r = await h.call('POST', `/api/servers/${sid}/patch-refresh`); expect(r.status).toBe(200); expect(r.json).toMatchObject({ ok: true });
+    expect((await agent('/agent/v1/heartbeat', { v: 't' })).json.patch).toBe(true); expect((await agent('/agent/v1/heartbeat', { v: 't' })).json.patch).toBe(false);
+    const none = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-tanpa-agen-2', host: '10.4.4.9', username: 'ops' })).json.id;
+    expect((await h.call('POST', `/api/servers/${none}/patch-refresh`)).json.error).toMatch(/belum punya agen/);
+  });
+
   it('lewat SSH dengan akun biasa tanpa sudo ditolak sejak awal (apt butuh root); root atau sudo menyala diterima', async () => {
     const s3 = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-biasa', host: '10.4.4.6', username: 'aiops', use_sudo: false })).json.id;
     const a3 = (await h.call('POST', `/api/servers/${s3}/agent`, {})).json, ts = String(Math.floor(Date.now() / 1000)), raw = JSON.stringify(FACTS());

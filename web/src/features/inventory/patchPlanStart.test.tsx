@@ -7,9 +7,9 @@ import { PatchingPanel } from './PatchingPanel';
 
 afterEach(() => vi.unstubAllGlobals());
 
-const row = (over: Partial<PatchRow> = {}): PatchRow => ({ server_id: 1, name: 'srv-1', os: 'Ubuntu 24.04', kernel: '6.8', reported: Date.now() - 60_000, stale: false, updates: 3, security: 2, reboot: false, reboot_days: null, eol_days: 900, cves: 1, exploited: 1, vuln_unknown: 0, level: 'critical', reasons: [], ...over });
+const row = (over: Partial<PatchRow> = {}): PatchRow => ({ patched_at: null, server_id: 1, name: 'srv-1', os: 'Ubuntu 24.04', kernel: '6.8', reported: Date.now() - 60_000, stale: false, updates: 3, security: 2, reboot: false, reboot_days: null, eol_days: 900, cves: 1, exploited: 1, vuln_unknown: 0, level: 'critical', reasons: [], ...over });
 const ov = (rows: PatchRow[]): PatchOverview => ({ rows, without_agent: 0 });
-const detail = (over: Partial<PatchDetail> = {}): PatchDetail => ({ plan: null, name: 'srv-1', os: 'Ubuntu 24.04 LTS', reported: Date.now(), ecosystem: 'Ubuntu:24.04:LTS', supported: true, matched_at: Date.now(), kev_at: Date.now(), total: 3, packages: [
+const detail = (over: Partial<PatchDetail> = {}): PatchDetail => ({ patched_at: null, plan: null, name: 'srv-1', os: 'Ubuntu 24.04 LTS', reported: Date.now(), ecosystem: 'Ubuntu:24.04:LTS', supported: true, matched_at: Date.now(), kev_at: Date.now(), total: 3, packages: [
   { name: 'openssl', old: '1', new: '2', sec: true, cves: ['CVE-2024-0001'], ids: [], exploited: ['CVE-2024-0001'], unknown: false, external: false },
   { name: 'nginx', old: '1', new: '2', sec: true, cves: [], ids: [], exploited: [], unknown: false, external: false },
   { name: 'curl', old: '1', new: '2', sec: false, cves: [], ids: [], exploited: [], unknown: false, external: false }], ...over });

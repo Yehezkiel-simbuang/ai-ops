@@ -97,19 +97,22 @@ export interface PatchRow {
   updates: number | null; security: number | null; reboot: boolean; reboot_days: number | null; eol_days: number | null;
   /** CVE unik yang ditutup patch (null = belum dicocokkan atau distro belum didukung), berapa yang sedang dieksploitasi, dan paket yang sumbernya tidak terjangkau. */
   cves: number | null; exploited: number; vuln_unknown: number;
+  /** Waktu patch terakhir selesai diterapkan bila LEBIH BARU daripada laporan agen: daftar ini belum mencerminkannya. */
+  patched_at: number | null;
   level: Level | null; reasons: Array<{ level: Level; text: string }>;
 }
 /** Server yang agennya melapor, yang paling perlu perhatian di atas. Dihitung dari fakta tersimpan dan batas Standar saat ini. */
 export async function overview(now = Date.now()): Promise<{ rows: PatchRow[]; without_agent: number }> {
   const o = await loadOverrides();
   const all = await db().query<{ server_id: number; name: string; patch: PatchFacts | null; patch_ts: number | null; patch_vulns: Vulns.VulnReport | null }>('SELECT s.id AS server_id, s.name, a.patch, a.patch_ts, a.patch_vulns FROM servers s LEFT JOIN agents a ON a.server_id=s.id ORDER BY s.name');
+  const patched = new Map((await db().query<{ server_id: number; t: number }>("SELECT server_id, max(updated) AS t FROM recommendations WHERE kind='patch' AND status='done' GROUP BY server_id")).map((x) => [x.server_id, Number(x.t)]));
   const rows: PatchRow[] = [];
   for (const r of all) {
     if (!r.patch) continue;
     const f = r.patch, stale = !r.patch_ts || now - r.patch_ts > STALE_MS, vr = r.patch_vulns && r.patch_vulns.pkgs.length ? r.patch_vulns : null, found = assess(f, o, now, r.patch_vulns).filter((x): x is Finding => x.level !== null);
     const eol = eolOf(f.os_id, f.os_version);
     rows.push({
-      server_id: r.server_id, name: r.name, os: f.os_name || [f.os_id, f.os_version].filter(Boolean).join(' '), kernel: f.kernel ?? '', reported: r.patch_ts, stale,
+      patched_at: (patched.get(r.server_id) ?? 0) > (r.patch_ts ?? 0) ? patched.get(r.server_id)! : null, server_id: r.server_id, name: r.name, os: f.os_name || [f.os_id, f.os_version].filter(Boolean).join(' '), kernel: f.kernel ?? '', reported: r.patch_ts, stale,
       updates: f.updates ?? null, security: f.security ?? null, reboot: !!f.reboot, reboot_days: f.reboot && f.reboot_since ? Math.floor((now - f.reboot_since * 1000) / DAY) : null, eol_days: eol == null ? null : Math.floor((eol - now) / DAY),
       cves: vr ? new Set(vr.pkgs.flatMap((p) => p.cves)).size : null, exploited: vr ? new Set(vr.pkgs.flatMap((p) => p.exploited)).size : 0, vuln_unknown: vr ? vr.pkgs.filter((p) => p.unknown || p.external).length : 0,
       level: found.reduce<Level | null>((m, x) => (m === null || RANK[x.level] > RANK[m] ? x.level : m), null), reasons: found.sort((a, b) => RANK[b.level] - RANK[a.level]).map((x) => ({ level: x.level, text: x.detail }))
@@ -128,5 +131,14 @@ export async function detail(serverId: number) {
   const pkgs = (f?.packages ?? []).map((p) => byName.get(p.name) ?? { ...p, cves: [], ids: [], exploited: [], unknown: false, external: p.official === false });
   pkgs.sort((a, b) => b.exploited.length - a.exploited.length || Number(b.sec) - Number(a.sec) || b.cves.length - a.cves.length || a.name.localeCompare(b.name));
   const plan = await db().one<{ id: number; status: string; created: number }>("SELECT id, status, created FROM recommendations WHERE kind='patch' AND server_id=$1 AND status IN ('proposed','approved','executing','failed') ORDER BY id DESC LIMIT 1", [serverId]);   // rencana terakhir yang masih relevan, supaya pengguna tidak membuat yang kembar
-  return { plan: plan ?? null, name: r.name, os: f ? f.os_name || [f.os_id, f.os_version].filter(Boolean).join(' ') : '', reported: r.patch_ts, ecosystem: eco, supported: eco !== null, matched_at: r.patch_vulns_ts, kev_at: matched?.kev_at ?? null, total: f?.packages?.length ?? 0, packages: pkgs };
+  const done = await db().one<{ t: number | null }>("SELECT max(updated) AS t FROM recommendations WHERE kind='patch' AND status='done' AND server_id=$1", [serverId]);
+  return { patched_at: done?.t && Number(done.t) > (r.patch_ts ?? 0) ? Number(done.t) : null, plan: plan ?? null, name: r.name, os: f ? f.os_name || [f.os_id, f.os_version].filter(Boolean).join(' ') : '', reported: r.patch_ts, ecosystem: eco, supported: eco !== null, matched_at: r.patch_vulns_ts, kev_at: matched?.kev_at ?? null, total: f?.packages?.length ?? 0, packages: pkgs };
+}
+
+/** Minta agen melapor fakta pembaruan pada detak jantung berikutnya. Agen versi lama mengabaikan permintaan ini; perbarui agennya. */
+export async function requestRefresh(serverId: number): Promise<{ ok: true; online: boolean }> {
+  const a = await db().one<{ online: boolean }>('SELECT online FROM agents WHERE server_id=$1', [serverId]);
+  if (!a) throw bad('Server ini belum punya agen');
+  await db().exec("INSERT INTO meta(key,value) VALUES($1,'1') ON CONFLICT(key) DO UPDATE SET value='1'", [`patch_refresh_${serverId}`]);
+  return { ok: true, online: !!a.online };
 }
