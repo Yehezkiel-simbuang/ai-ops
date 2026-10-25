@@ -92,6 +92,18 @@ describe('rencana patch', () => {
     Servers.setExec(sshExec() as never);
   });
 
+  it('lewat SSH dengan akun biasa tanpa sudo ditolak sejak awal (apt butuh root); root atau sudo menyala diterima', async () => {
+    const s3 = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-biasa', host: '10.4.4.6', username: 'aiops', use_sudo: false })).json.id;
+    const a3 = (await h.call('POST', `/api/servers/${s3}/agent`, {})).json, ts = String(Math.floor(Date.now() / 1000)), raw = JSON.stringify(FACTS());
+    await h.app.inject({ method: 'POST', url: '/agent/v1/patch', headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': a3.keyId, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(a3.config.secret, ts, 'POST', '/agent/v1/patch', raw) }, payload: raw });
+    const r = await h.call('POST', `/api/servers/${s3}/patch-plan`, {}); expect(r.status).toBe(400);
+    expect(r.json.error).toMatch(/Akun SSH "aiops" bukan root dan opsi "Pakai sudo" mati/); expect(r.json.error).toMatch(/nyalakan eksekusi di agen/);
+    await h.db.exec('UPDATE servers SET use_sudo=true WHERE id=$1', [s3]); expect((await h.call('POST', `/api/servers/${s3}/patch-plan`, {})).status).toBe(200);
+    await h.db.exec("UPDATE servers SET use_sudo=false, username='root' WHERE id=$1", [s3]); expect((await h.call('POST', `/api/servers/${s3}/patch-plan`, {})).status).toBe(200);
+    const cmds = ((await h.call('GET', `/api/patch-plans/${(await h.db.one<{ id: number }>("SELECT max(id) AS id FROM recommendations WHERE kind='patch' AND server_id=$1", [s3]))!.id}`)).json.steps as Array<{ command: string }>).map((s) => s.command);
+    expect(cmds.some((c) => c.startsWith('sudo'))).toBe(false);   // root: tanpa sudo
+  });
+
   it('tanpa jalur eksekusi (tanpa kunci SSH dan agen tidak boleh mengeksekusi): rencana tidak dibuat', async () => {
     const s2 = (await h.call('POST', '/api/servers', { name: 'srv-tanpa-jalur', host: '10.4.4.5', username: 'ops', generate_key: true })).json.id; await h.db.exec("UPDATE servers SET ssh_key_enc='', key_path='' WHERE id=$1", [s2]);
     const a2 = (await h.call('POST', `/api/servers/${s2}/agent`, {})).json, ts = String(Math.floor(Date.now() / 1000)), raw = JSON.stringify(FACTS());

@@ -41,7 +41,10 @@ export async function propose(serverId: number, names: string[] | null, by: stri
   const row = await db().one<{ patch: PatchFacts | null; patch_vulns: VulnReport | null }>('SELECT patch, patch_vulns FROM agents WHERE server_id=$1', [serverId]), f = row?.patch;
   if (!f?.packages?.length) throw bad('Belum ada daftar paket dari agen. Pasang agen dan tunggu laporan pertamanya, atau memang tidak ada pembaruan.');
   if (f.manager !== 'apt') throw bad('Penerapan patch baru mendukung Debian dan Ubuntu (apt).');
-  if (Incidents.execPath(server, await Agents.statusOf(serverId)) === 'none') throw bad(NO_PATH);
+  const path = Incidents.execPath(server, await Agents.statusOf(serverId));
+  if (path === 'none') throw bad(NO_PATH);
+  // apt butuh root. Lewat SSH dengan akun biasa tanpa sudo, langkah pemasangan pasti gagal ("Permission denied" pada /var/lib/apt/lists/lock): tolak sejak awal.
+  if (path === 'ssh' && server.username !== 'root' && !server.use_sudo) throw bad(`Akun SSH "${server.username}" bukan root dan opsi "Pakai sudo" mati, padahal apt butuh root. Di halaman Server, ubah "${server.name}" dan centang "Pakai sudo", lalu pastikan akun itu punya sudo tanpa kata sandi. Atau nyalakan eksekusi di agen (jalur agen berjalan sebagai root).`);
 
   const known = new Map(f.packages.map((p) => [p.name, p]));
   const wanted = names?.length ? names : (f.packages.some((p) => p.sec) ? f.packages.filter((p) => p.sec) : f.packages).map((p) => p.name);
