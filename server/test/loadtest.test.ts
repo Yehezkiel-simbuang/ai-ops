@@ -137,6 +137,10 @@ describe('uji beban: API, persetujuan, dan runner', () => {
     release(); await Explain.settled(); expect(calls).toBe(1);
     expect((await h.call('GET', `/api/loadtests/${created.id}`)).json.ai).toMatchObject({ status: 'done', text: expect.stringContaining('pool DB'), model: 'm-murah', error: '' });
     expect(seen).toContain('tahap 2: 20 pengguna'); expect(seen).not.toContain('staging-token-rahasia');
+    // jawaban kosong (model penalaran kehabisan anggaran): dicatat gagal dengan alasan, tidak pernah "selesai" kosong; anggaran cukup besar untuk penalaran
+    let budget = 0; Explain.configure({ llm: (async (_r: string, req: { maxTokens?: number }) => { budget = req.maxTokens ?? 0; return { text: '  ', usage: { input: 10, output: 700 } }; }) as never });
+    await h.call('POST', `/api/loadtests/${created.id}/explain`); await Explain.settled();
+    expect((await h.call('GET', `/api/loadtests/${created.id}`)).json.ai).toMatchObject({ status: 'failed', error: expect.stringContaining('jawaban kosong') }); expect(budget).toBeGreaterThanOrEqual(2000);
     // gagal: galatnya tersimpan dan terlihat, bukan hilang; bisa diminta lagi
     Explain.configure({ llm: (async () => { throw new Error('model tidak menjawab'); }) as never });
     await h.call('POST', `/api/loadtests/${created.id}/explain`); await Explain.settled();

@@ -47,7 +47,9 @@ async function ask(t: Detail, role: string): Promise<string> {
   const r = await dep.llm(role, {
     system: 'Kamu insinyur performa. Bahasa Indonesia, ringkas. Hanya gunakan angka yang diberikan; jangan mengarang metrik, jangan menyebut penyebab pasti bila bukti tidak cukup, dan nyatakan apa yang belum bisa disimpulkan. Tahap bertanda TIDAK MURNI jangan dijadikan bukti kelemahan server.',
     messages: [{ role: 'user', content: `${evidence(t)}\n\nJelaskan: (1) di mana kemungkinan leher botol dan bukti angkanya, (2) seberapa yakin (tinggi/sedang/rendah) beserta alasannya, (3) satu atau dua percobaan lanjutan yang paling berguna.` }],
-    maxTokens: 700
+    maxTokens: 4000   // model penalaran (mis. gpt-5) memakai anggaran ini juga untuk "berpikir"; 700 membuat jawabannya kosong
   });
-  return r.text.trim();
+  const text = r.text.trim();
+  if (!text) throw new Error('Model mengembalikan jawaban kosong (anggaran token bisa habis untuk penalaran). Coba lagi, atau pilih model lain untuk peran ini di Pengaturan.');   // jangan menyimpan yang kosong sebagai "selesai"
+  return text;
 }
