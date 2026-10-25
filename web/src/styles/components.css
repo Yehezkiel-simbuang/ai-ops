@@ -202,3 +202,35 @@ ul.events { list-style: none; padding: 0; margin: 8px 0 0; }
   .guide-toc button[aria-current="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .guide pre, .guide .codeblock { max-width: 100%; overflow-x: auto; }
 }
+
+/* Playground: halaman menyusun (langkah di kiri, ringkasan di kanan) dan penjelasan alur di daftar. */
+.pg-layout { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1000px) { .pg-layout { grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); } .pg-aside { position: sticky; top: 12px; } }
+.pg-step { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 0 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+.pg-step:first-child { border-top: 0; padding-top: 0; }
+.pg-num { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: .82rem; font-weight: 600; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); }
+.pg-body { min-width: 0; display: grid; gap: 10px; }
+.pg-body h2 { margin: 0; font-size: 1rem; }
+.pg-cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+button.pg-card { text-align: left; display: grid; gap: 6px; align-content: start; padding: 12px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--panel); color: var(--ink); cursor: pointer; font: inherit; }
+button.pg-card:hover { border-color: var(--accent); }
+button.pg-card[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+button.pg-card:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.pg-card .d { font-size: .8rem; color: var(--muted); line-height: 1.4; }
+.pg-chips, .pg-flow { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.pg-chip { font-family: var(--font-mono); font-size: .72rem; padding: 1px 6px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--panel-2); color: var(--ink); overflow-wrap: anywhere; }
+.pg-flow { margin: 6px 0 4px; } .pg-flow .arrow { color: var(--muted); }
+.pg-svc { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: .86rem; }
+.pg-aside h2 { margin: 0 0 8px; font-size: 1rem; }
+.pg-next { margin: 12px 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: .86rem; }
+.pg-next ol { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.pg-how { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); counter-reset: how; }
+.pg-how li { counter-increment: how; display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.pg-how li b::before { content: counter(how) ". "; color: var(--accent); }
+.pg-empty { display: grid; gap: 8px; }
+.pg-empty h2 { margin: 0; font-size: 1rem; }
+@media (max-width: 800px) {
+  /* Judul lipatan yang panjang tetap sebaris dengan penandanya; keterangannya turun ke baris sendiri. */
+  details.group > summary > b { flex: 1 1 0; min-width: 0; }
+  details.group > summary > .lbl { flex-basis: 100%; margin-left: 22px; }
+}

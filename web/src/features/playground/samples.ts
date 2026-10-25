@@ -1,7 +1,11 @@
 // Contoh Compose untuk mengisi formulir. Sengaja kecil dan memakai image publik bertanda versi.
-export const SAMPLES: Array<{ id: string; label: string; compose: string; health: string }> = [
+export interface Sample { id: string; label: string; description: string; parts: string[]; compose: string; health: string }
+
+export const SAMPLES: Sample[] = [
   {
     id: 'web-redis', label: 'Web sederhana + Redis',
+    description: 'Satu web server dengan cache Redis. Pilihan paling aman untuk mencoba Playground pertama kali.',
+    parts: ['nginx', 'redis'],
     health: '/',
     compose: `services:
   web:
@@ -22,6 +26,8 @@ export const SAMPLES: Array<{ id: string; label: string; compose: string; health
   },
   {
     id: 'lb', label: 'Dua web di belakang load balancer',
+    description: 'Dua web server dengan HAProxy di depannya. Untuk melihat bagaimana beban dibagi dan apa yang terjadi bila satu web mati.',
+    parts: ['nginx', 'nginx', 'haproxy'],
     health: '/',
     compose: `services:
   web1:

@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import { mockApi, renderWithProviders } from '@/test/utils';
+import { PlaygroundEditorPage } from './PlaygroundEditorPage';
 import { PlaygroundPage, deploySummary } from './PlaygroundPage';
 import type { ComposeAnalysis, PlaygroundDeploy } from './types';
 
@@ -31,27 +32,47 @@ describe('PlaygroundPage', () => {
     expect(await screen.findByText(/Belum ada server playground/)).toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Susunan baru' })).toBeDisabled();
   });
 
-  it('susunan baru: analisis tampil, masalah mengunci Simpan, yang valid menyimpan muatan yang benar', async () => {
-    const calls = mockApi({
-      'GET /api/playground': { body: [] }, 'GET /api/servers': { body: [server()] }, 'POST /api/playground': { body: { id: 9 } },
-      'POST /api/playground/analyze': (_u, init) => { const c = JSON.parse(String(init?.body)).compose as string; return { body: c.includes('privileged') ? analysis({ problems: ['Layanan "web": "privileged" tidak diizinkan'] }) : analysis() }; }
-    });
-    renderWithProviders(<PlaygroundPage />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Susunan baru' }));
-    const dlg = (await screen.findByRole('heading', { name: 'Susunan baru' })).closest('dialog')!, save = within(dlg).getByRole('button', { name: 'Simpan' });
-    expect(save).toBeDisabled();
-    await userEvent.type(within(dlg).getByPlaceholderText('mis. web + redis'), 'uji-1');
-    await userEvent.click(within(dlg).getByRole('button', { name: 'Web sederhana + Redis' }));
-    expect(await within(dlg).findByText('valid')).toBeInTheDocument();
+  const Pages = () => (<Routes><Route path="/playground" element={<PlaygroundPage />} /><Route path="/playground/:id" element={<PlaygroundEditorPage />} /></Routes>);
+  const analyzeMock = (_u: string, init?: RequestInit) => { const c = JSON.parse(String(init?.body)).compose as string; return { body: c.includes('privileged') ? analysis({ problems: ['Layanan "web": "privileged" tidak diizinkan'] }) : analysis() }; };
+
+  it('susunan baru: tombol membuka halaman menyusun (bukan modal); pilih bahan awal, ringkasan tampil, masalah mengunci Simpan, yang valid menyimpan muatan yang benar', async () => {
+    const calls = mockApi({ 'GET /api/playground': { body: [] }, 'GET /api/servers': { body: [server()] }, 'POST /api/playground': { body: { id: 9 } }, 'POST /api/playground/analyze': analyzeMock });
+    renderWithProviders(<Pages />, { route: '/playground' });
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Susunan baru' }))[0]!);
+    expect(await screen.findByRole('heading', { name: 'Susunan baru' })).toBeInTheDocument(); expect(document.querySelector('dialog[open]')).toBeNull();
+    const save = screen.getByRole('button', { name: 'Simpan' }); expect(save).toBeDisabled(); expect(screen.getByText('Pilih bahan awal atau isi docker-compose.yml.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Web sederhana [+] Redis/ }));
+    expect(screen.getByRole('button', { name: /Web sederhana [+] Redis/ })).toHaveAttribute('aria-pressed', 'true');
+    const aside = screen.getByLabelText('Ringkasan'); expect(await within(aside).findByText('valid')).toBeInTheDocument(); expect(within(aside).getByText('nginx:1.27')).toBeInTheDocument(); expect(within(aside).getByLabelText('Alur lalu lintas')).toHaveTextContent(':8080 web');
+    expect((screen.getByPlaceholderText('mis. web + redis') as HTMLInputElement).value).toBe('Web sederhana + Redis');   // nama terisi dari pilihan
+    await userEvent.clear(screen.getByPlaceholderText('mis. web + redis')); await userEvent.type(screen.getByPlaceholderText('mis. web + redis'), 'uji-1');
     await waitFor(() => expect(save).toBeEnabled());
-    const box = within(dlg).getByLabelText('Isi Compose');
-    await userEvent.type(box, ' privileged');
-    expect(await within(dlg).findByText(/tidak diizinkan/)).toBeInTheDocument();
-    await waitFor(() => expect(save).toBeDisabled());
-    await userEvent.clear(box); await userEvent.click(within(dlg).getByRole('button', { name: 'Web sederhana + Redis' }));
+    const box = screen.getByLabelText('Isi Compose'); await userEvent.type(box, ' privileged');
+    expect(await within(aside).findByText(/tidak diizinkan/)).toBeInTheDocument(); await waitFor(() => expect(save).toBeDisabled());
+    await userEvent.clear(box); await userEvent.click(screen.getByRole('button', { name: /Web sederhana [+] Redis/ }));
     await waitFor(() => expect(save).toBeEnabled()); await userEvent.click(save);
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/api/playground')).toBe(true));
     expect(calls.find((c) => c.method === 'POST' && c.path === '/api/playground')!.body).toMatchObject({ server_id: 1, name: 'uji-1', health_path: '/', target_port: 0, compose: expect.stringContaining('nginx:1.27-alpine') });
+    expect(await screen.findByRole('heading', { name: 'Playground' })).toBeInTheDocument();   // kembali ke daftar setelah disimpan
+  });
+
+  it('rakit dari aplikasi saya: formulir perakit tampil di halaman, hasilnya masuk ke YAML dan ringkasan', async () => {
+    mockApi({ 'GET /api/playground': { body: [] }, 'GET /api/servers': { body: [server()] }, 'POST /api/playground/analyze': analyzeMock, 'POST /api/playground/build': { body: { compose: ['services:', '  app:', '    image: x:1', ''].join(String.fromCharCode(10)), analysis: analysis() } } });
+    renderWithProviders(<Pages />, { route: '/playground/baru' });
+    await userEvent.click(await screen.findByRole('button', { name: /Rakit dari aplikasi saya/ }));
+    await userEvent.type(await screen.findByPlaceholderText(/ghcr.io/), 'x:1'); await userEvent.click(screen.getByRole('button', { name: 'Buat Compose' }));
+    expect(((await screen.findByLabelText('Isi Compose')) as HTMLTextAreaElement).value).toContain('image: x:1'); expect(await screen.findByText('Hasil rakitan (docker-compose.yml)')).toBeInTheDocument();
+    expect(await within(screen.getByLabelText('Ringkasan')).findByText('valid')).toBeInTheDocument();
+  });
+
+  it('mengubah susunan yang sudah ada membuka halamannya dengan isi terisi; yang sedang terpasang tidak bisa diubah', async () => {
+    mockApi({ 'GET /api/playground': { body: [deploy({ id: 7, status: 'draft', compose: ['services:', '  web:', '    image: nginx:1.27', ''].join(String.fromCharCode(10)) }), deploy({ id: 8, status: 'running' })] }, 'GET /api/servers': { body: [server()] }, 'POST /api/playground/analyze': analyzeMock });
+    const { unmount } = renderWithProviders(<Pages />, { route: '/playground/7' });
+    expect(await screen.findByRole('heading', { name: 'Ubah susunan' })).toBeInTheDocument(); expect(((await screen.findByLabelText('Isi Compose')) as HTMLTextAreaElement).value).toContain('nginx:1.27'); expect((screen.getByLabelText('Server playground') as HTMLSelectElement).disabled).toBe(true);
+    unmount(); vi.unstubAllGlobals();
+    mockApi({ 'GET /api/playground': { body: [deploy({ id: 8, status: 'running' })] }, 'GET /api/servers': { body: [server()] } });
+    renderWithProviders(<Pages />, { route: '/playground/8' });
+    expect(await screen.findByText(/sedang terpasang tidak bisa diubah/)).toBeInTheDocument();
   });
 
   it('Pasang menampilkan ringkasan untuk disetujui; batal tidak memasang, konfirmasi memasang', async () => {
