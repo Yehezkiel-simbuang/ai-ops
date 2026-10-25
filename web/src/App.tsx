@@ -13,6 +13,7 @@ import { GuidePage } from '@/features/guide/GuidePage';
 import { ComparePage } from '@/features/loadtest/ComparePage';
 import { StandardsPage } from '@/features/standards/StandardsPage';
 import { PlaygroundPage } from '@/features/playground/PlaygroundPage';
+import { PatchPlanPage } from '@/features/inventory/PatchPlanPage';
 import { PlaygroundEditorPage } from '@/features/playground/PlaygroundEditorPage';
 import { WebChecksPage } from '@/features/webchecks/WebChecksPage';
 import { LoadTestsPage } from '@/features/loadtest/LoadTestsPage';
@@ -42,6 +43,7 @@ export function App() {
           <Route path="panduan" element={<GuidePage />} />
 <Route path="standar" element={<StandardsPage />} />
 <Route path="playground" element={<PlaygroundPage />} />
+<Route path="patch/:id" element={<PatchPlanPage />} />
 <Route path="playground/:id" element={<PlaygroundEditorPage />} />
 <Route path="layanan" element={<WebChecksPage />} />
 <Route path="uji-beban" element={<LoadTestsPage />} />

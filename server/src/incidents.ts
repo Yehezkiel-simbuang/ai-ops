@@ -226,7 +226,7 @@ async function execute(recId: number): Promise<void> {
   for (const s of await db().query("SELECT * FROM rec_steps WHERE rec_id=$1 AND status='pending' ORDER BY n", [recId])) {
     if (classify(s.command).cls === 'blocked') { await db().exec("UPDATE rec_steps SET status='blocked' WHERE id=$1", [s.id]); failed = `Langkah ${s.n} diblokir kebijakan`; break; }
     await db().exec("UPDATE rec_steps SET status='running', started=$1, via=$2 WHERE id=$3", [Date.now(), path, s.id]);
-    const r = await runOne(server, path, recId, s.n, s.command, s.class === 'read' ? 60 : 180);
+    const r = await runOne(server, path, recId, s.n, s.command, s.class === 'read' ? 60 : rec.kind === 'patch' ? 600 : 180);   // memasang paket bisa lama; batas agen 10 menit
     await db().exec('UPDATE rec_steps SET status=$1, exit_code=$2, stdout=$3, stderr=$4, finished=$5, via=$6 WHERE id=$7', [r.exit === 0 ? 'done' : 'failed', r.exit, r.stdout.slice(0, 20000), r.stderr.slice(0, 20000), Date.now(), r.via, s.id]);
     await audit('agen', 'rekomendasi.langkah', `#${recId}.${s.n} [${s.class}] exit ${r.exit} via ${r.via}`); ran++;
     if (r.exit !== 0) {
@@ -237,6 +237,7 @@ async function execute(recId: number): Promise<void> {
   let verifyOut = '';
   if (!failed && rec.verify && classify(rec.verify).cls === 'read') { const v = await runOne(server, path, recId, null, rec.verify, 60); verifyOut = (v.stdout || v.stderr).slice(0, 4000); }
   await db().exec('UPDATE recommendations SET status=$1, summary=$2, verify_out=$3, updated=$4 WHERE id=$5', [failed ? 'failed' : 'done', failed || `${ran} langkah dijalankan via ${path}${readFails ? ` (${readFails} langkah baca gagal, tidak menghentikan perbaikan)` : ''}. Tunggu agen melaporkan pulih bila kondisi sudah normal.`, verifyOut, Date.now(), recId]);
+  if (rec.kind === 'patch') await db().exec("INSERT INTO meta(key,value) VALUES($1,'1') ON CONFLICT(key) DO UPDATE SET value='1'", [`patch_refresh_${rec.server_id}`]);   // agen diminta melapor ulang pada detak jantung berikutnya
   Notify.recommendationResult(server.name, rec.id, !failed, failed || `${ran} langkah selesai`);
 }
 

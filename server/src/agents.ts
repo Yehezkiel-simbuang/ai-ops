@@ -48,12 +48,13 @@ export const signCommand = (secret: string, id: string, expires: number, timeout
 
 // ---------- detak jantung
 export interface Heartbeat { v?: string; host?: string; up?: number; exec?: boolean; open?: string[] | null; hb?: number }
-export async function heartbeat(serverId: number, hb: Heartbeat, ip: string): Promise<{ ok: true; poll: boolean }> {
+export async function heartbeat(serverId: number, hb: Heartbeat, ip: string): Promise<{ ok: true; poll: boolean; patch: boolean }> {
   const open = Array.isArray(hb.open) ? hb.open.slice(0, 50).map((k) => String(k).slice(0, 120)) : [];
   await db().exec('UPDATE agents SET last_seen=$1, version=$2, hostname=$3, exec_enabled=$4, open_keys=$5::jsonb, online=true, last_ip=$6 WHERE server_id=$7', [Date.now(), String(hb.v ?? '').slice(0, 40), String(hb.host ?? '').slice(0, 120), !!hb.exec, JSON.stringify(open), ip.slice(0, 64), serverId]);
   if (hb.hb) await db().exec("INSERT INTO meta(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value", [`agent_hb_${serverId}`, String(Math.min(3600, Math.max(15, Number(hb.hb))))]);
   await syncAlerts(serverId, [{ key: 'agent:offline', on: false }], 'agent');   // pulih bila sebelumnya mati
-  return { ok: true, poll: await hasPending(serverId) };
+  const refresh = await db().one("DELETE FROM meta WHERE key=$1 RETURNING value", [`patch_refresh_${serverId}`]);   // setelah patch diterapkan: minta agen melapor ulang sekarang, tidak menunggu 6 jam
+  return { ok: true, poll: await hasPending(serverId), patch: !!refresh };
 }
 
 // ---------- antrean perintah untuk agen

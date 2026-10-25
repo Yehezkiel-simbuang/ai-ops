@@ -80,6 +80,7 @@ type fakeApp struct {
 	configJSON    string // jawaban GET /agent/v1/config; bila diisi, detak jantung memberi tahu versinya
 	configFetches int
 	patches       []string // badan POST /agent/v1/patch
+	patchNow      bool     // detak jantung berikutnya meminta agen melapor fakta pembaruan sekarang
 }
 
 func newFakeApp(t *testing.T) *fakeApp {
@@ -107,7 +108,7 @@ func newFakeApp(t *testing.T) *fakeApp {
 			w.Write([]byte(`{"ok":true}`))
 		case r.URL.Path == "/agent/v1/heartbeat":
 			f.beats++
-			resp := map[string]any{"ok": true, "poll": f.poll}
+			resp := map[string]any{"ok": true, "poll": f.poll, "patch": f.patchNow}
 			if f.configJSON != "" {
 				var c struct{ Version string }
 				_ = json.Unmarshal([]byte(f.configJSON), &c)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 const aptOut = "os_id=ubuntu\nos_version=22.04\nos_name=Ubuntu 22.04.4 LTS\nkernel=5.15.0-101-generic\nmanager=apt\nupdates=23\nsecurity=4\nreboot=1\nreboot_since=1700000000\n"
@@ -112,4 +113,34 @@ func TestParsePatchPackagesAreCapped(t *testing.T) {
 	if n := len(parsePatch(sb.String()).Packages); n != maxPatchPkgs {
 		t.Fatalf("batas %d, dapat %d", maxPatchPkgs, n)
 	}
+}
+
+func TestHeartbeatPatchFlagTriggersReport(t *testing.T) {
+	app := newFakeApp(t)
+	a := newTestAgent(t, app, nil, &fakeSys{cores: 2, load: 0.1, mem: 50, disk: 10}, &fakeRun{outs: map[string]string{"os-release": aptOut}})
+	if err := a.Heartbeat(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(150 * time.Millisecond)
+	app.mu.Lock()
+	n := len(app.patches)
+	app.patchNow = true
+	app.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("tanpa permintaan, detak jantung tidak boleh memicu laporan: %d", n)
+	}
+	if err := a.Heartbeat(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		app.mu.Lock()
+		n = len(app.patches)
+		app.mu.Unlock()
+		if n == 1 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("permintaan lapor ulang dari aplikasi harus menghasilkan satu laporan, dapat %d", n)
 }

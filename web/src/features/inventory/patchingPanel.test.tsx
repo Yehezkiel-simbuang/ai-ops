@@ -61,7 +61,7 @@ describe('Pembaruan sistem', () => {
     const link = within(dlg).getByRole('link', { name: 'CVE-2024-0001' }); expect(link).toHaveAttribute('href', 'https://nvd.nist.gov/vuln/detail/CVE-2024-0001'); expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
     expect(within(dlg).getAllByText('dieksploitasi')).toHaveLength(1); expect(within(dlg).getByText('sumber: xz-utils')).toBeInTheDocument();
     expect(within(dlg).getByText('belum bisa dicek (sumber tidak terjangkau)')).toBeInTheDocument(); expect(within(dlg).getByText('repositori pihak ketiga: belum bisa dicek')).toBeInTheDocument(); expect(within(dlg).getByText('tidak ada yang tercatat')).toBeInTheDocument();
-    const names = within(dlg).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0]!.textContent); expect(names[0]).toContain('liblzma5');
+    const names = within(dlg).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1]!.textContent); expect(names[0]).toContain('liblzma5');
   });
 
   it('distro yang belum didukung: rincian tetap menampilkan daftar paket dengan penjelasan, tanpa menuduh "tidak ada kerentanan"', async () => {

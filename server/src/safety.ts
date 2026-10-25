@@ -22,7 +22,8 @@ const BLOCKED: Array<[RegExp, string]> = [
 const READ_CMDS = new Set(['cat', 'ls', 'df', 'free', 'uptime', 'uname', 'ps', 'vmstat', 'iostat', 'mpstat', 'sar', 'pidstat', 'ss', 'netstat', 'nproc', 'lscpu', 'lsblk', 'lsof', 'mount', 'findmnt', 'dmesg', 'grep', 'egrep', 'fgrep',
   'head', 'tail', 'wc', 'stat', 'du', 'whoami', 'id', 'date', 'hostname', 'hostnamectl', 'pwd', 'echo', 'printf', 'true', 'test', '[', 'sort', 'uniq', 'cut', 'awk', 'sed', 'tr', 'column', 'basename', 'dirname', 'readlink', 'realpath', 'file', 'which', 'type',
   'command', 'env', 'printenv', 'getent', 'lsmod', 'lspci', 'lsusb', 'blkid', 'smartctl', 'sensors', 'w', 'who', 'last', 'ulimit', 'top', 'htop', 'nl', 'tac', 'less', 'more', 'md5sum', 'sha256sum', 'ping', 'dig', 'nslookup', 'host', 'traceroute', 'mtr', 'tracepath',
-  'journalctl', 'systemctl', 'zpool', 'zfs', 'sysctl', 'ip', 'mysql', 'mariadb', 'mysqladmin', 'redis-cli', 'nginx', 'php-fpm', 'php-fpm8.1', 'php-fpm8.2', 'php-fpm8.3', 'php', 'apachectl', 'docker', 'pct', 'qm', 'pvesh', 'pveversion', 'pvesm', 'psql', 'find', 'curl', 'timeout', 'time', 'nice', 'ionice', 'xargs', 'tee', 'sudo']);
+  'journalctl', 'systemctl', 'zpool', 'zfs', 'sysctl', 'ip', 'mysql', 'mariadb', 'mysqladmin', 'redis-cli', 'nginx', 'php-fpm', 'php-fpm8.1', 'php-fpm8.2', 'php-fpm8.3', 'php', 'apachectl', 'docker', 'pct', 'qm', 'pvesh', 'pveversion', 'pvesm', 'psql', 'find', 'curl', 'timeout', 'time', 'nice', 'ionice', 'xargs', 'tee', 'sudo',
+  'apt-mark', 'apt-cache', 'dpkg-query', 'needrestart', 'apt-get'])   // sub-perintah yang mengubah dibatasi di READ_SUB;
 
 type SubCheck = (a: string[]) => boolean;
 const has = (a: string[], f: (x: string) => boolean): boolean => a.some(f);
@@ -51,7 +52,13 @@ const READ_SUB: Record<string, SubCheck> = {
   curl: (a) => { const t = a.join(' '); return /(^|\s)(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])([:/\s]|$)/.test(t) && !/(^|\s)(-X|--request|-d|--data\S*|-F|--form|-T|--upload-file|-o\s+(?!\/dev\/null)\S+|--output\s+(?!\/dev\/null)\S+|-O)(\s|$)/.test(t); },
   ping: (a) => has(a, (x) => x === '-c'),
   top: (a) => a.includes('-b') || has(a, (x) => /^-[a-zA-Z]*b/.test(x)), htop: () => false, less: () => false, more: () => false,
-  env: (a) => a.length === 0, printenv: () => true
+  env: (a) => a.length === 0, printenv: () => true,
+  // paket: hanya yang membaca. apt-get baru "baca" bila hanya simulasi; needrestart hanya mode daftar (tidak merestart).
+  'apt-mark': (a) => /^(showhold|showmanual|showauto)$/.test(a[0] || ''),
+  'apt-cache': () => true,
+  'dpkg-query': () => true,
+  needrestart: (a) => a.includes('-b') && !has(a, (x) => /^-[a-zA-Z]*r/.test(x) && x !== '-b') || (a.includes('-r') && a[a.indexOf('-r') + 1] === 'l'),
+  'apt-get': (a) => has(a, (x) => x === '-s' || x === '--simulate' || x === '--dry-run' || x === '--just-print')
 };
 // pola `a[0]` yang bisa undefined di bawah noUncheckedIndexedAccess dipertahankan lewat `|| ''`
 

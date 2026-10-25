@@ -71,8 +71,12 @@ export interface RecStep {
   status: StepStatus; stdout: string; stderr: string; exit_code: number | null; via: string | null;
 }
 export interface Recommendation {
-  id: number; status: RecStatus; source: 'llm' | 'playbook'; diagnosis: string; summary: string; verify_out: string; resolved_after: boolean; updated: number; steps: RecStep[];
+  id: number; kind?: 'incident' | 'patch'; status: RecStatus; source: 'llm' | 'playbook'; diagnosis: string; summary: string; verify_out: string; resolved_after: boolean; updated: number; steps: RecStep[];
 }
+/** Rencana patch = rekomendasi tanpa insiden (kind 'patch'); meta berisi paket dan ringkasan dampaknya. */
+export interface PatchPlanPkg { name: string; old: string; new: string; sec: boolean; official: boolean; cves: string[]; exploited: string[]; impact: string | null }
+export interface PatchPlanMeta { packages: PatchPlanPkg[]; restarts: string[]; reboot: boolean; totals: { packages: number; security: number; cves: number; exploited: number; thirdParty: number } }
+export type PatchPlan = Recommendation & { kind: 'patch'; title: string; meta: PatchPlanMeta; server_name: string; server_id: number; path: ExecPath };
 export interface IncidentDetail { incident: Incident & { server_name: string }; recommendations: Recommendation[]; path: ExecPath }
 
 // ---------- setup oleh agen

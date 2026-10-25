@@ -166,6 +166,8 @@ type heartbeatResp struct {
 	OK   bool   `json:"ok"`
 	Poll bool   `json:"poll"`
 	Cfg  string `json:"cfg"` // versi konfigurasi dari halaman Standar; berbeda dari yang dipegang agen = ambil yang baru
+	// Patch: aplikasi meminta fakta pembaruan dilaporkan sekarang (mis. setelah pengguna menerapkan patch), tanpa menunggu putaran berikutnya.
+	Patch bool `json:"patch"`
 }
 
 // Heartbeat sangat kecil (sekitar 150 byte): hanya memberi tahu aplikasi bahwa agen hidup dan kunci apa yang sedang kritis.
@@ -185,6 +187,13 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 	a.pollWanted = hr.Poll
 	a.mu.Unlock()
 	a.wakePoll()
+	if hr.Patch {
+		go func() { // di goroutine: membaca daftar paket bisa makan waktu dan tidak boleh menahan detak jantung
+			if err := a.ReportPatch(ctx); err != nil {
+				a.logf.Printf("pembaruan: %v", err)
+			}
+		}()
+	}
 	if hr.Cfg != "" && hr.Cfg != a.tune.Version() {
 		if err := a.SyncConfig(ctx); err != nil {
 			a.logf.Printf("konfigurasi dari aplikasi: %v", err)

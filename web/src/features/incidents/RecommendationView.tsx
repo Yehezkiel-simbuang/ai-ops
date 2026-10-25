@@ -1,7 +1,7 @@
 // Satu rekomendasi: diagnosis, langkah (dengan kotak pilih), tombol setujui/tolak/susun ulang, dan hasil eksekusi.
 import { useState } from 'react';
 import { useAction } from '@/api/queries';
-import type { ExecPath, Incident, RecStep, Recommendation, StepStatus } from '@/api/types';
+import type { ExecPath, RecStep, Recommendation, StepStatus } from '@/api/types';
 import { useDialogs } from '@/components/dialogs/DialogProvider';
 import { RecStatusBadge } from '@/components/StatusBadges';
 import { Badge, type Tone } from '@/components/ui/Badge';
@@ -49,17 +49,19 @@ function StepCard({ s, actionable, checked, onToggle }: { s: RecStep; actionable
   );
 }
 
-export function RecommendationView({ incident, rec, path }: { incident: Incident; rec: Recommendation; path: ExecPath }) {
+/** incident.id kosong = rencana patch (tanpa insiden): tidak ada tombol susun ulang. */
+export function RecommendationView({ incident, rec, path }: { incident: { id: number | null; server_name: string }; rec: Recommendation; path: ExecPath }) {
   const { confirm } = useDialogs();
   const [selected, setSelected] = useState<Record<number, boolean>>(() => Object.fromEntries(rec.steps.map((s) => [s.n, canSelect(s)])));
   const actionable = rec.status === 'proposed' || rec.status === 'failed';
   const chosen = rec.steps.filter((s) => selected[s.n] && canSelect(s));
   const changes = chosen.filter((s) => s.class === 'change');
-  const invalidate = [['incidents'], ['overview']];
+  const invalidate = [['incidents'], ['overview'], ['patch-plan']];
 
   const approve = useAction(() => post(`/api/recommendations/${rec.id}/approve`, { steps: chosen.map((s) => s.n) }), { success: 'Disetujui, dijalankan...', invalidate });
   const reject = useAction(() => post(`/api/recommendations/${rec.id}/reject`), { invalidate });
   const regenerate = useAction((useModel: boolean) => { toast('Menyusun ulang...'); return post(`/api/incidents/${incident.id}/regenerate`, { useModel }); }, { invalidate });
+  const isPatch = rec.kind === 'patch' || incident.id === null;
 
   const doApprove = async () => {
     const what = changes.length ? ` (${changes.length} di antaranya MENGUBAH sistem)` : ' (hanya membaca)';
@@ -70,13 +72,13 @@ export function RecommendationView({ incident, rec, path }: { incident: Incident
   return (
     <>
       <div className="row" style={{ marginBottom: 8 }}>
-        <h2 style={{ margin: 0 }}><IconBulb size={16} aria-hidden />Rekomendasi #{rec.id}</h2>
+        <h2 style={{ margin: 0 }}><IconBulb size={16} aria-hidden />{isPatch ? 'Rencana patch' : 'Rekomendasi'} #{rec.id}</h2>
         <RecStatusBadge status={rec.status} />
-        <Badge>{rec.source === 'llm' ? 'disusun model' : 'playbook'}</Badge>
+        {!isPatch && <Badge>{rec.source === 'llm' ? 'disusun model' : 'playbook'}</Badge>}
         <div className="grow" />
         <span className="lbl">Jalur eksekusi: {EXEC_PATHS[path]}</span>
       </div>
-      <Hint><span>{rec.diagnosis}</span></Hint>
+      <Hint><span style={{ whiteSpace: 'pre-line' }}>{rec.diagnosis}</span></Hint>
       <div className="tl">{rec.steps.map((s) => <StepCard key={s.id} s={s} actionable={actionable} checked={!!selected[s.n]} onToggle={(v) => setSelected((x) => ({ ...x, [s.n]: v }))} />)}</div>
 
       {rec.summary && (
@@ -94,8 +96,8 @@ export function RecommendationView({ incident, rec, path }: { incident: Incident
           <div className="row" style={{ marginTop: 14 }}>
             <Button primary icon={IconCheck} disabled={!chosen.length || path === 'none'} onClick={doApprove}>Setujui dan jalankan ({chosen.length} langkah)</Button>
             <Button icon={IconBan} onClick={() => reject.mutateAsync()}>Tolak</Button>
-            <Button icon={IconBulb} onClick={() => regenerate.mutateAsync(true)}>Susun ulang dengan model</Button>
-            <Button icon={IconList} onClick={() => regenerate.mutateAsync(false)}>Susun ulang (playbook)</Button>
+            {!isPatch && <Button icon={IconBulb} onClick={() => regenerate.mutateAsync(true)}>Susun ulang dengan model</Button>}
+            {!isPatch && <Button icon={IconList} onClick={() => regenerate.mutateAsync(false)}>Susun ulang (playbook)</Button>}
           </div>
           {path === 'none' && <Note>Belum ada jalur eksekusi untuk server ini: tempel kunci SSH di halaman Server, atau aktifkan agen dengan eksekusi (halaman Agen) dan tunggu agen online.</Note>}
         </>
