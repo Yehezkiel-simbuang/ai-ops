@@ -24,6 +24,15 @@ const REC: Record<RecStatus, [Tone, string]> = {
   proposed: ['warn', 'Rekomendasi siap'], approved: ['acc', 'Disetujui'], executing: ['acc', 'Dijalankan'], done: ['ok', 'Perbaikan selesai'],
   failed: ['bad', 'Perbaikan gagal'], rejected: ['mute', 'Ditolak'], superseded: ['mute', 'Digantikan']
 };
+/** Status rencana patch dalam bahasa alurnya: draf (belum disetujui), berjalan, selesai, gagal. */
+export const PLAN_STATUS: Record<RecStatus, [Tone, string]> = {
+  proposed: ['warn', 'Draf'], approved: ['acc', 'Berjalan'], executing: ['acc', 'Berjalan'], done: ['ok', 'Selesai'], failed: ['bad', 'Gagal'], rejected: ['mute', 'Ditolak'], superseded: ['mute', 'Digantikan']
+};
+export function PlanStatusBadge({ status }: { status: RecStatus }) {
+  const [tone, label] = PLAN_STATUS[status] ?? ['mute', status];
+  return <Badge tone={tone}>{label}</Badge>;
+}
+
 export function RecStatusBadge({ status }: { status: RecStatus | null }) {
   const [tone, label] = (status && REC[status]) || ['mute', 'Menyusun rekomendasi'];
   return <Badge tone={tone}>{label}</Badge>;

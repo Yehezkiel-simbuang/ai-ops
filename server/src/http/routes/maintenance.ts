@@ -20,6 +20,7 @@ export function maintenanceRoutes(): Router {
   r.get('/servers/:id/patching', handle((req) => Patching.detail(idParam(req))));
   r.post('/servers/:id/patch-plan', handle(async (req) => ({ id: await PatchPlan.propose(idParam(req), parse(planBody, req.body).packages ?? null, req.user!.username) })));   // hanya menyusun; tidak menjalankan apa pun
   r.post('/servers/:id/patch-refresh', handle((req) => Patching.requestRefresh(idParam(req))));   // minta agen melapor ulang
+  r.get('/patch-plans', handle(() => PatchPlan.list()));
   r.get('/patch-plans/:id', handle((req) => PatchPlan.detail(idParam(req))));
   r.get('/maintenance/templates', handle(() => Maint.TEMPLATES));
   r.put('/maintenance/:id', handle((req) => Maint.update(idParam(req), parse(taskBody, req.body) as never)));

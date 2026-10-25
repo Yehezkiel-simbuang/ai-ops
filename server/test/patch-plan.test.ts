@@ -121,6 +121,16 @@ describe('rencana patch', () => {
     expect((await h.call('POST', `/api/servers/${none}/patch-refresh`)).json.error).toMatch(/belum punya agen/);
   });
 
+  it('daftar rencana: semua status, terbaru dulu, dengan jumlah paket dan kemajuan langkah', async () => {
+    const id = (await h.call('POST', `/api/servers/${sid}/patch-plan`, { packages: ['curl', 'nginx'] })).json.id;
+    let l = (await h.call('GET', '/api/patch-plans')).json as Array<Record<string, any>>;
+    expect(l[0]).toMatchObject({ id, status: 'proposed', server_name: 'srv-patch', packages: 2, steps_done: 0, steps_total: 6 }); expect(l.every((x, i) => i === 0 || x.id < l[i - 1]!.id)).toBe(true);
+    expect(new Set(l.map((x) => x.status))).toEqual(expect.objectContaining({})); expect(l.some((x) => x.status === 'done')).toBe(true);
+    await h.db.exec("UPDATE rec_steps SET status='done' WHERE rec_id=$1 AND n<=2", [id]); await h.db.exec("UPDATE recommendations SET status='executing' WHERE id=$1", [id]);
+    l = (await h.call('GET', '/api/patch-plans')).json; expect(l.find((x) => x.id === id)).toMatchObject({ status: 'executing', steps_done: 2, steps_total: 6 });
+    await h.db.exec("UPDATE recommendations SET status='done' WHERE id=$1", [id]);   // jangan menyisakan rencana berjalan untuk tes berikutnya
+  });
+
   it('lewat SSH dengan akun biasa tanpa sudo ditolak sejak awal (apt butuh root); root atau sudo menyala diterima', async () => {
     const s3 = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-biasa', host: '10.4.4.6', username: 'aiops', use_sudo: false })).json.id;
     const a3 = (await h.call('POST', `/api/servers/${s3}/agent`, {})).json, ts = String(Math.floor(Date.now() / 1000)), raw = JSON.stringify(FACTS());

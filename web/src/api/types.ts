@@ -77,6 +77,7 @@ export interface Recommendation {
 export interface PatchPlanPkg { name: string; old: string; new: string; sec: boolean; official: boolean; cves: string[]; exploited: string[]; impact: string | null }
 export interface PatchPlanMeta { packages: PatchPlanPkg[]; restarts: string[]; reboot: boolean; totals: { packages: number; security: number; cves: number; exploited: number; thirdParty: number } }
 export type PatchPlan = Recommendation & { kind: 'patch'; title: string; meta: PatchPlanMeta; server_name: string; server_id: number; path: ExecPath };
+export interface PatchPlanItem { id: number; server_id: number; server_name: string; title: string; status: RecStatus; created: number; updated: number; approved_by: string | null; packages: number | null; security: number | null; steps_done: number; steps_total: number; summary: string }
 export interface IncidentDetail { incident: Incident & { server_name: string }; recommendations: Recommendation[]; path: ExecPath }
 
 // ---------- setup oleh agen

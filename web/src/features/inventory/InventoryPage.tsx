@@ -11,6 +11,7 @@ import { useDebounced } from '@/lib/useDebounced';
 import { CredentialDialog } from './CredentialDialog';
 import { MaintenanceGrid, VaultGrid } from './InventoryGrids';
 import { PatchingPanel } from './PatchingPanel';
+import { PatchPlansPanel } from './PatchPlansPanel';
 import { ServerGrid } from './ServerGrid';
 
 type Tab = 'server' | 'vault' | 'maint';
@@ -35,6 +36,7 @@ function MaintenanceTab({ search }: { search: string }) {
   return (
     <>
       <PatchingPanel />
+      <PatchPlansPanel />
       <Async query={query}>{(rows) => <MaintenanceGrid rows={rows.filter((t) => !needle || `${t.title} ${t.server_name ?? ''}`.toLowerCase().includes(needle))} searching={!!needle} />}</Async>
     </>
   );

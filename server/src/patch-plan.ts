@@ -103,3 +103,14 @@ export async function detail(recId: number) {
   const server = await Servers.get(rec.server_id), steps = await db().query('SELECT * FROM rec_steps WHERE rec_id=$1 ORDER BY n', [recId]);
   return { ...rec, steps, server_name: server?.name ?? '', path: server ? Incidents.execPath(server, await Agents.statusOf(rec.server_id)) : 'none' };
 }
+
+/** Semua rencana patch (terbaru dulu) dengan status dan kemajuan langkahnya, untuk daftar pelacakan. */
+export async function list() {
+  return db().query<{ id: number; server_id: number; server_name: string; title: string; status: string; created: number; updated: number; approved_by: string | null; packages: number | null; security: number | null; steps_done: number; steps_total: number; summary: string }>(
+    `SELECT r.id, r.server_id, s.name AS server_name, r.title, r.status, r.created, r.updated, r.approved_by,
+            (r.meta->'totals'->>'packages')::int AS packages, (r.meta->'totals'->>'security')::int AS security,
+            (SELECT count(*)::int FROM rec_steps t WHERE t.rec_id=r.id AND t.status='done') AS steps_done,
+            (SELECT count(*)::int FROM rec_steps t WHERE t.rec_id=r.id AND t.status NOT IN ('skipped','blocked')) AS steps_total,
+            left(r.summary, 160) AS summary
+       FROM recommendations r JOIN servers s ON s.id=r.server_id WHERE r.kind='patch' ORDER BY r.id DESC LIMIT 100`);
+}

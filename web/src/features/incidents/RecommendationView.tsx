@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useAction } from '@/api/queries';
 import type { ExecPath, RecStep, Recommendation, StepStatus } from '@/api/types';
 import { useDialogs } from '@/components/dialogs/DialogProvider';
-import { RecStatusBadge } from '@/components/StatusBadges';
+import { PlanStatusBadge, RecStatusBadge } from '@/components/StatusBadges';
 import { Badge, type Tone } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Hint, Note } from '@/components/ui/Layout';
@@ -73,7 +73,7 @@ export function RecommendationView({ incident, rec, path }: { incident: { id: nu
     <>
       <div className="row" style={{ marginBottom: 8 }}>
         <h2 style={{ margin: 0 }}><IconBulb size={16} aria-hidden />{isPatch ? 'Rencana patch' : 'Rekomendasi'} #{rec.id}</h2>
-        <RecStatusBadge status={rec.status} />
+        {isPatch ? <PlanStatusBadge status={rec.status} /> : <RecStatusBadge status={rec.status} />}
         {!isPatch && <Badge>{rec.source === 'llm' ? 'disusun model' : 'playbook'}</Badge>}
         <div className="grow" />
         <span className="lbl">Jalur eksekusi: {EXEC_PATHS[path]}</span>

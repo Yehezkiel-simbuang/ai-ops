@@ -11,6 +11,16 @@ import { PageHead, Section } from '@/components/ui/Layout';
 import { IconLayers } from '@/components/icons';
 import { RecommendationView } from '@/features/incidents/RecommendationView';
 
+const STATE_TEXT: Record<string, string> = {
+  proposed: 'Draf: rencana sudah disusun tetapi belum Anda setujui, jadi belum ada yang dijalankan di server.',
+  approved: 'Berjalan: sudah disetujui dan sedang dimulai. Anda boleh pindah halaman; kemajuannya tersimpan di sini.',
+  executing: 'Berjalan: langkahnya sedang dikerjakan di server. Anda boleh pindah halaman; kemajuannya tersimpan di sini.',
+  done: 'Selesai: semua langkah yang disetujui sudah dijalankan. Daftar di panel Pembaruan sistem diperbarui setelah agen melapor ulang.',
+  failed: 'Gagal: rencana berhenti di langkah yang gagal, dan langkah sesudahnya tidak dijalankan. Lihat keluaran langkah itu di bawah.',
+  rejected: 'Ditolak: rencana ini tidak dijalankan.',
+  superseded: 'Digantikan: ada rencana yang lebih baru untuk server ini, jadi yang ini tidak akan dijalankan.'
+};
+
 function Impact({ p }: { p: PatchPlan }) {
   const m = p.meta, t = m.totals;
   return (
@@ -50,6 +60,7 @@ export function PatchPlanPage() {
       </PageHead>
       <Async query={query}>{(p) => (
         <>
+          <p className="lbl" role="status" style={{ margin: '0 0 8px' }}>{STATE_TEXT[p.status] ?? ''}</p>
           <Impact p={p} />
           <Section title="Langkah dan persetujuan">
             <RecommendationView key={p.id} incident={{ id: null, server_name: p.server_name }} rec={p} path={p.path} />

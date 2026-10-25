@@ -4,7 +4,7 @@ import { queryOptions, useMutation, useQueryClient, type QueryKey } from '@tanst
 import { get, qs } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type {
-  AgentOverview, FleetAgent, PatchDetail, PatchOverview, PatchPlan, AppConfig, AppSettings, AuditEntry, Channel, ChecksMeta, Credential, IncidentDetail, Incident, InventoryRow, MaintenanceLogEntry,
+  AgentOverview, FleetAgent, PatchDetail, PatchOverview, PatchPlan, PatchPlanItem, AppConfig, AppSettings, AuditEntry, Channel, ChecksMeta, Credential, IncidentDetail, Incident, InventoryRow, MaintenanceLogEntry,
   MaintenanceTask, MaintenanceTemplate, MonitorView, NotificationLog, Overview, Run, RunDetail, RunTemplate, Server, ServerProfile, UsageSummary, User
 } from './types';
 
@@ -38,6 +38,7 @@ export const q = {
   vault: (search: string) => queryOptions({ queryKey: ['vault', search], queryFn: () => get<Credential[]>(`/api/vault${qs({ q: search })}`), refetchInterval: s(15) }),
   maintenance: () => queryOptions({ queryKey: ['maintenance'], queryFn: () => get<MaintenanceTask[]>('/api/maintenance'), refetchInterval: s(15) }),
   patching: () => queryOptions({ queryKey: ['maintenance', 'patching'], queryFn: () => get<PatchOverview>('/api/maintenance/patching'), refetchInterval: s(30) }),
+  patchPlans: () => queryOptions({ queryKey: ['patch-plans'], queryFn: () => get<PatchPlanItem[]>('/api/patch-plans'), refetchInterval: (q) => (q.state.data?.some((p) => p.status === 'approved' || p.status === 'executing') ? 3000 : 30_000) }),
   patchDetail: (id: number) => queryOptions({ queryKey: ['servers', id, 'patching'], queryFn: () => get<PatchDetail>(`/api/servers/${id}/patching`) }),
   patchPlan: (id: number) => queryOptions({ queryKey: ['patch-plan', id], queryFn: () => get<PatchPlan>(`/api/patch-plans/${id}`), refetchInterval: (q) => (q.state.data && ['approved', 'executing'].includes(q.state.data.status) ? 2000 : false) }),
   maintenanceTemplates: () => queryOptions({ queryKey: ['maintenance-templates'], queryFn: () => get<MaintenanceTemplate[]>('/api/maintenance/templates'), staleTime: Infinity }),
