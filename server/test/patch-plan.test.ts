@@ -92,6 +92,18 @@ describe('rencana patch', () => {
     Servers.setExec(sshExec() as never);
   });
 
+  it('selama ada rencana yang berjalan, rencana baru ditolak; rincian server menunjuk rencana terakhir yang masih relevan', async () => {
+    const id = (await h.call('POST', `/api/servers/${sid}/patch-plan`, { packages: ['curl'] })).json.id;
+    const plan = async () => (await h.call('GET', `/api/servers/${sid}/patching`)).json.plan;
+    expect(await plan()).toMatchObject({ id, status: 'proposed' });
+    await h.db.exec("UPDATE recommendations SET status='executing' WHERE id=$1", [id]);
+    const r = await h.call('POST', `/api/servers/${sid}/patch-plan`, {}); expect(r.status).toBe(400); expect(r.json.error).toContain(`#${id} sedang berjalan`);
+    expect(await plan()).toMatchObject({ id, status: 'executing' });
+    await h.db.exec("UPDATE recommendations SET status='done' WHERE id=$1", [id]);
+    expect(await plan()).toBeNull();   // yang sudah selesai tidak lagi mengganggu
+    expect((await h.call('POST', `/api/servers/${sid}/patch-plan`, { packages: ['curl'] })).status).toBe(200);
+  });
+
   it('lewat SSH dengan akun biasa tanpa sudo ditolak sejak awal (apt butuh root); root atau sudo menyala diterima', async () => {
     const s3 = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-biasa', host: '10.4.4.6', username: 'aiops', use_sudo: false })).json.id;
     const a3 = (await h.call('POST', `/api/servers/${s3}/agent`, {})).json, ts = String(Math.floor(Date.now() / 1000)), raw = JSON.stringify(FACTS());

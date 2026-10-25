@@ -12,7 +12,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { DataGrid, type Column } from '@/components/ui/DataGrid';
 import { Fold } from '@/components/ui/Fold';
+import { Hint } from '@/components/ui/Layout';
 import { Modal } from '@/components/ui/Modal';
+import { IconInfo, IconTimer } from '@/components/icons';
 import { post } from '@/lib/api';
 import { RANK } from '@/lib/levels';
 import { ago } from '@/lib/format';
@@ -42,11 +44,16 @@ function PatchDetailView({ id, d, onClose }: { id: number; d: PatchDetail; onClo
   const navigate = useNavigate(), [pick, setPick] = useState<Set<string>>(() => new Set(defaultPick(d)));
   const make = useAction(() => post<{ id: number }>(`/api/servers/${id}/patch-plan`, { packages: d.packages.filter((p) => pick.has(p.name)).map((p) => p.name) }), { onSuccess: (r) => navigate(`/patch/${r.id}`) });
   const toggle = (name: string, on: boolean) => setPick((s) => { const n = new Set(s); if (on) n.add(name); else n.delete(name); return n; });
-  const canPlan = d.supported && d.total > 0;
+  const canPlan = d.supported && d.total > 0, busy = d.plan?.status === 'approved' || d.plan?.status === 'executing';
   return (
     <div>
       <h2>Pembaruan {d.name}</h2>
       <p className="lbl">{d.os || 'OS tidak terbaca'} | {d.total} paket akan naik{d.matched_at ? ` | kerentanan dicocokkan ${ago(d.matched_at)}` : ''}</p>
+      {d.plan && (
+        <Hint icon={busy ? IconTimer : IconInfo}>
+          <span>{busy ? `Rencana patch #${d.plan.id} sedang berjalan di server ini. Tunggu sampai selesai; membuat rencana baru dikunci selama itu.` : d.plan.status === 'failed' ? `Rencana patch #${d.plan.id} terakhir gagal.` : `Sudah ada rencana patch #${d.plan.id} yang menunggu persetujuan. Membuat rencana baru akan menggantikannya.`} <Link to={`/patch/${d.plan.id}`}>Buka rencana #{d.plan.id}</Link></span>
+        </Hint>
+      )}
       {!d.supported && <p className="lbl">Pencocokan kerentanan dan penerapan patch belum mendukung OS ini (baru Debian dan Ubuntu), jadi hanya daftar paket yang ditampilkan.</p>}
       {d.supported && !d.matched_at && <p className="lbl">Kerentanan sedang dicocokkan; buka lagi beberapa saat lagi.</p>}
       {d.total === 0 ? <p className="lbl">Tidak ada paket yang menunggu.</p> : (
@@ -65,7 +72,7 @@ function PatchDetailView({ id, d, onClose }: { id: number; d: PatchDetail; onClo
       )}
       <p className="lbl" style={{ marginTop: 8 }}>Sumber: OSV.dev (kerentanan yang menimpa versi terpasang tetapi tidak versi baru) dan CISA KEV (sedang dieksploitasi). Ini daftar pembaruan, bukan jaminan bahwa tidak ada kerentanan lain.</p>
       <div className="row" style={{ marginTop: 12 }}>
-        {canPlan && <Button primary disabled={!pick.size || make.isPending} onClick={() => make.mutateAsync()}>{make.isPending ? 'Menyusun...' : `Siapkan rencana patch (${pick.size} paket)`}</Button>}
+        {canPlan && <Button primary disabled={!pick.size || make.isPending || busy} onClick={() => make.mutateAsync()}>{make.isPending ? 'Menyusun...' : `Siapkan rencana patch (${pick.size} paket)`}</Button>}
         <Button onClick={onClose}>Tutup</Button>
       </div>
       {canPlan && <p className="lbl">Menyiapkan rencana hanya menyusun langkah dan dampaknya. Tidak ada yang dijalankan di server sebelum Anda menyetujuinya.</p>}

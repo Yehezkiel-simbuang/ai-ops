@@ -46,6 +46,8 @@ export async function propose(serverId: number, names: string[] | null, by: stri
   // apt butuh root. Lewat SSH dengan akun biasa tanpa sudo, langkah pemasangan pasti gagal ("Permission denied" pada /var/lib/apt/lists/lock): tolak sejak awal.
   if (path === 'ssh' && server.username !== 'root' && !server.use_sudo) throw bad(`Akun SSH "${server.username}" bukan root dan opsi "Pakai sudo" mati, padahal apt butuh root. Di halaman Server, ubah "${server.name}" dan centang "Pakai sudo", lalu pastikan akun itu punya sudo tanpa kata sandi. Atau nyalakan eksekusi di agen (jalur agen berjalan sebagai root).`);
 
+  const busy = await db().one<{ id: number }>("SELECT id FROM recommendations WHERE kind='patch' AND server_id=$1 AND status IN ('approved','executing') ORDER BY id DESC LIMIT 1", [serverId]);
+  if (busy) throw bad(`Rencana patch #${busy.id} sedang berjalan di server ini. Tunggu sampai selesai sebelum menyiapkan yang baru.`);
   const known = new Map(f.packages.map((p) => [p.name, p]));
   const wanted = names?.length ? names : (f.packages.some((p) => p.sec) ? f.packages.filter((p) => p.sec) : f.packages).map((p) => p.name);
   const picked = [...new Set(wanted)];

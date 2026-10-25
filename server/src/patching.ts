@@ -127,5 +127,6 @@ export async function detail(serverId: number) {
   const byName = new Map((matched?.pkgs ?? []).map((p) => [p.name, p]));
   const pkgs = (f?.packages ?? []).map((p) => byName.get(p.name) ?? { ...p, cves: [], ids: [], exploited: [], unknown: false, external: p.official === false });
   pkgs.sort((a, b) => b.exploited.length - a.exploited.length || Number(b.sec) - Number(a.sec) || b.cves.length - a.cves.length || a.name.localeCompare(b.name));
-  return { name: r.name, os: f ? f.os_name || [f.os_id, f.os_version].filter(Boolean).join(' ') : '', reported: r.patch_ts, ecosystem: eco, supported: eco !== null, matched_at: r.patch_vulns_ts, kev_at: matched?.kev_at ?? null, total: f?.packages?.length ?? 0, packages: pkgs };
+  const plan = await db().one<{ id: number; status: string; created: number }>("SELECT id, status, created FROM recommendations WHERE kind='patch' AND server_id=$1 AND status IN ('proposed','approved','executing','failed') ORDER BY id DESC LIMIT 1", [serverId]);   // rencana terakhir yang masih relevan, supaya pengguna tidak membuat yang kembar
+  return { plan: plan ?? null, name: r.name, os: f ? f.os_name || [f.os_id, f.os_version].filter(Boolean).join(' ') : '', reported: r.patch_ts, ecosystem: eco, supported: eco !== null, matched_at: r.patch_vulns_ts, kev_at: matched?.kev_at ?? null, total: f?.packages?.length ?? 0, packages: pkgs };
 }
