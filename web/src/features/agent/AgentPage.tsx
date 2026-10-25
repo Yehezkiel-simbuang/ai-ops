@@ -12,6 +12,7 @@ import { Empty, Hint, Item, List, PageHead } from '@/components/ui/Layout';
 import { IconAlert, IconBook, IconCopy, IconKey, IconPulse, IconShield, IconTerminal, IconTrash } from '@/components/icons';
 import { del, post } from '@/lib/api';
 import { ago } from '@/lib/format';
+import { copyText } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import { EXEC_PATHS } from '@/features/incidents/RecommendationView';
 
@@ -31,7 +32,7 @@ function StatusList({ a, path }: { a: AgentStatus; path: ExecPath }) {
 }
 
 function InstallGuide({ guide }: { guide: AgentGuide }) {
-  const copy = async () => { try { await navigator.clipboard.writeText(guide.script); toast('Tersalin'); } catch { toast('Gagal menyalin; pilih teks lalu salin manual', true); } };
+  const copy = async () => { if (await copyText(guide.script)) toast('Tersalin'); else toast('Gagal menyalin; pilih teks lalu salin manual', true); };
   return (
     <section className="sec">
       <h2><IconTerminal size={16} aria-hidden />Panduan pemasangan (jalankan sebagai root di server)</h2>

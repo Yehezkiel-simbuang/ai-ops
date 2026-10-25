@@ -1,6 +1,7 @@
 // Dialog imperatif berbasis janji: pengganti confirm()/prompt() bawaan peramban, plus konfirmasi password dan penampil rahasia.
 //   const { confirm, askPassword } = useDialogs();   if (await confirm('Hapus server ini?')) { ... }
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { clearClipboard, copyText } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
@@ -97,12 +98,10 @@ function TextBody({ a, secret, title, label, confirmLabel, icon, close }: {
 function SecretBody({ a, close }: { a: Extract<Active, { kind: 'secret' }>; close: () => void }) {
   useEffect(() => { if (a.persistent) return undefined; const t = setTimeout(close, SECRET_VISIBLE_MS); return () => clearTimeout(t); }, [close, a.persistent]);
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(a.secret);
-      if (a.persistent) { toast('Tersalin'); return; }
-      toast('Tersalin. Papan klip dikosongkan setelah 30 detik.');
-      setTimeout(() => { navigator.clipboard.writeText('').catch(() => undefined); }, SECRET_VISIBLE_MS);
-    } catch { toast('Gagal menyalin; pilih teks lalu salin manual', true); }
+    if (!(await copyText(a.secret))) { toast('Gagal menyalin; pilih teks lalu salin manual', true); return; }
+    if (a.persistent) { toast('Tersalin'); return; }
+    toast('Tersalin. Papan klip dikosongkan setelah 30 detik.');
+    setTimeout(() => { void clearClipboard(); }, SECRET_VISIBLE_MS);
   };
   return (
     <div className="form">

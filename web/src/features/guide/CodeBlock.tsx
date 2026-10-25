@@ -1,10 +1,11 @@
 import { Button } from '@/components/ui/Button';
 import { IconCopy } from '@/components/icons';
+import { copyText } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 
 /** Blok perintah yang bisa disalin. Teks tampil apa adanya agar bisa diperiksa sebelum dijalankan. */
 export function CodeBlock({ title, children }: { title?: string; children: string }) {
-  const copy = async () => { try { await navigator.clipboard.writeText(children); toast('Tersalin'); } catch { toast('Gagal menyalin; pilih teks lalu salin manual', true); } };
+  const copy = async () => { if (await copyText(children)) toast('Tersalin'); else toast('Gagal menyalin; pilih teks lalu salin manual', true); };
   return (
     <div className="codeblock">
       {title && <div className="lbl" style={{ marginBottom: 4 }}>{title}</div>}
