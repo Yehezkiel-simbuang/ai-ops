@@ -54,11 +54,17 @@ export async function getProject(id: string): Promise<ProjectDetail> {
 }
 
 /** Salinan arsitektur dengan estimasi yang diterima; hanya parameter yang ditandai tebakan pada node itu yang boleh diganti. */
-export function withEstimates(arch: ProjectDetail['arch'], estimates: LabEstimate[]): ProjectDetail['arch'] {
+export function withEstimates(arch: ProjectDetail['arch'], estimates: Array<Omit<LabEstimate, 'scope'> & { scope?: LabEstimate['scope'] }>): ProjectDetail['arch'] {
   if (!estimates.length) return arch;
   const copy = structuredClone(arch);
   const nodes = copy.nodes as Array<Record<string, unknown> & { id: string; assumed?: string[] }>;
+  const workloads = copy.workloads as Array<Record<string, unknown> & { id: string }>;
   for (const e of estimates) {
+    if (e.scope === 'workload') {   // nilai pengguna: dipakai apa adanya dan tidak ikut divariasikan analisis sensitivitas
+      const w = workloads.find((x) => x.id === e.node);
+      if (w && typeof w.cpuMs === 'number') { w.cpuMs = e.value; w.cpuAssumed = false; }
+      continue;
+    }
     const n = nodes.find((x) => x.id === e.node);
     if (!n || !n.assumed?.includes(e.key)) continue;
     n[e.key] = e.value; n.assumed = n.assumed.filter((k) => k !== e.key);

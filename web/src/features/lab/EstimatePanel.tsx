@@ -10,7 +10,7 @@ import { post } from '@/lib/api';
 import type { LabEstimate, LabEstimateResult, LabProject, Scenario } from './types';
 
 const TONE: Record<LabEstimateResult['estimates'][number]['confidence'], Tone> = { tinggi: 'ok', sedang: 'warn', rendah: 'bad' };
-const idOf = (e: { node: string; key: string }): string => `${e.node}.${e.key}`;
+const idOf = (e: { node: string; key: string; scope?: 'node' | 'workload' }): string => `${e.scope === 'workload' ? 'workload:' : ''}${e.node}.${e.key}`;
 
 /** Parameter yang masih tebakan pada arsitektur proyek, dikurangi yang sudah diganti estimasi. */
 export function guessedParams(project: LabProject, accepted: LabEstimate[]): Array<{ node: string; key: string; value: unknown }> {
@@ -61,7 +61,7 @@ export function EstimatePanel({ project, scenario, onApply }: { project: LabProj
       {accepted.length > 0 && (
         <>
           <h3 style={{ marginTop: 14 }}>Dipakai simulasi ({accepted.length})</h3>
-          <ul className="plain">{accepted.map((a) => <li key={idOf(a)}><b>{idOf(a)}</b> = {a.value} <Badge tone="acc">dari AI</Badge></li>)}</ul>
+          <ul className="plain">{accepted.map((a) => <li key={idOf(a)}><b>{idOf(a)}</b> = {a.value} <Badge tone="acc">{a.scope === 'workload' ? 'Anda isi' : 'dari AI'}</Badge></li>)}</ul>
         </>
       )}
       <h3 style={{ marginTop: 14 }}>Masih tebakan ({guessed.length})</h3>

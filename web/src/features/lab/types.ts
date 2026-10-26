@@ -2,7 +2,7 @@
 export type ParamValue = number | string | boolean;
 
 export interface LabNode { id: string; type: 'client' | 'proxy' | 'pool' | 'cache' | 'db' | 'disk' | 'external'; label?: string; workers?: number; cores?: number; connections?: number; instances?: number; disk?: string; assumed?: string[] }
-export interface LabWorkload { id: string; label?: string; client: string; pool?: string; rate: number; async?: boolean; cdn?: number }
+export interface LabWorkload { id: string; label?: string; client: string; pool?: string; rate: number; async?: boolean; mixed?: boolean; cdn?: number; cpuMs?: number; rateAssumed?: boolean; cpuAssumed?: boolean }
 export interface LabArch { name?: string; nodes: LabNode[]; workloads: LabWorkload[] }
 
 export interface LabParam {
@@ -24,7 +24,8 @@ export interface LabProject extends LabProjectSummary {
 export type LabAction = { kind: 'rec'; id: string } | { kind: 'component'; component: ComponentId; params: Record<string, ParamValue> };
 /** Skenario kegagalan: matikan satu node pada detik `at` selama `len` detik (0 = sampai akhir). */
 export interface LabFailure { node: string; at: number; len: number }
-export interface LabEstimate { node: string; key: string; value: number }
+/** scope 'workload': `node` berisi id workload dan key hanya 'cpuMs'. Tanpa scope = parameter node. */
+export interface LabEstimate { node: string; key: string; value: number; scope?: 'node' | 'workload' }
 export interface LabEstimateResult {
   estimates: Array<LabEstimate & { current: unknown; confidence: 'tinggi' | 'sedang' | 'rendah'; verified: boolean; file: string; line: number; quote: string; reason: string }>;
   role: string; model: string; filesRead: string[]; assumedCount: number;

@@ -12,8 +12,11 @@ export type LabAction = z.infer<typeof actionSchema>;
 const spikeSchema = z.object({
   on: z.boolean(), mult: z.number().min(1).max(10), at: z.number().min(0).max(300), len: z.number().min(1).max(300), every: z.number().min(0).max(300), shape: z.enum(['step', 'tri'])
 });
-/** Estimasi yang diterima pengguna: mengganti parameter tebakan pada satu node. Hanya kunci yang memang ditandai tebakan yang diterapkan. */
-export const estimateSchema = z.object({ node: z.string().min(1).max(80), key: z.string().min(1).max(40), value: z.number().positive().max(1_000_000) });
+/** Estimasi yang diterima pengguna. scope 'node' (bawaan): mengganti parameter tebakan pada satu node; hanya kunci yang ditandai tebakan yang diterapkan.
+ *  scope 'workload': `node` berisi id workload dan hanya `cpuMs` (waktu CPU per request) yang boleh diganti; laju diatur lewat beban (mix), bukan di sini. */
+export const WORKLOAD_KEYS = ['cpuMs'] as const;
+export const estimateSchema = z.object({ node: z.string().min(1).max(80), key: z.string().min(1).max(40), value: z.number().positive().max(1_000_000), scope: z.enum(['node', 'workload']).default('node') })
+  .refine((e) => e.scope === 'node' || (WORKLOAD_KEYS as readonly string[]).includes(e.key), { message: 'Workload hanya boleh mengganti cpuMs', path: ['key'] });
 export type LabEstimate = z.infer<typeof estimateSchema>;
 
 export const loadSchema = z.object({

@@ -139,28 +139,28 @@ function buildLaravel(root, stack, env, f) {
   let ci = 0;
   const color = function () { return COLORS[(ci++) % COLORS.length]; };
   if (f.routes.api > 0) {
-    workloads.push({ id: 'mobile_api', label: 'API mobile', client: 'mobile', pool: 'fpm', rate: 30, rateAssumed: true, cpuMs: 40, color: color(),
+    workloads.push({ id: 'mobile_api', label: 'API mobile', client: 'mobile', pool: 'fpm', rate: 30, rateAssumed: true, cpuAssumed: true, cpuMs: 40, color: color(),
       calls: redisCall.concat([f.sanctum && f.routes.sanctumGuarded
         ? { node: 'mysql', read: 4, write: true, hot: true, kb: 4, tag: 'sanctum_last_used' }
         : { node: 'mysql', read: 4 }]),
       evidence: f.sanctum ? ['laravel/sanctum' + (f.sanctumVersion ? ' ' + f.sanctumVersion : '') + ' menulis last_used_at di setiap request API (vendor/laravel/sanctum Guard)'].concat(f.evidence.sanctum_routes || []) : ['routes/api.php'] });
-    workloads.push({ id: 'mobile_login', label: 'Login mobile (bcrypt + tulis)', client: 'mobile', pool: 'fpm', rate: 2, rateAssumed: true, cpuMs: 120, color: color(),
+    workloads.push({ id: 'mobile_login', label: 'Login mobile (bcrypt + tulis)', client: 'mobile', pool: 'fpm', rate: 2, rateAssumed: true, cpuAssumed: true, cpuMs: 120, color: color(),
       calls: [{ node: 'mysql', read: 4, write: true, kb: 4 }, { node: 'mysql', write: true, kb: 4 }], evidence: ['routes/api.php: POST login'] });
   }
   Object.keys(f.external).forEach(function (h) {
     const files = f.external[h].filter(function (p) { return /\/Api\/|Api\.php/.test(p); });
     if (!files.length) return;
     const id = 'ext_' + h.replace(/[^a-z0-9]/g, '_');
-    workloads.push({ id: 'mobile_ext_' + id.slice(4, 16), label: 'Pembayaran lewat ' + hostLabel(h), client: 'mobile', pool: 'fpm', rate: 0.5, rateAssumed: true, cpuMs: 80, color: color(),
+    workloads.push({ id: 'mobile_ext_' + id.slice(4, 16), label: 'Pembayaran lewat ' + hostLabel(h), client: 'mobile', pool: 'fpm', rate: 0.5, rateAssumed: true, cpuAssumed: true, cpuMs: 80, color: color(),
       calls: [{ node: 'mysql', read: 5 }, { node: id, ms: 900 }, { node: 'mysql', write: true, kb: 8 }], evidence: files });
   });
-  if (f.routes.web > 0) workloads.push({ id: 'admin_web', label: 'Panel admin (halaman biasa)', client: 'admin', pool: 'fpm', rate: 1, rateAssumed: true, cpuMs: 80, color: color(),
+  if (f.routes.web > 0) workloads.push({ id: 'admin_web', label: 'Panel admin (halaman biasa)', client: 'admin', pool: 'fpm', rate: 1, rateAssumed: true, cpuAssumed: true, cpuMs: 80, color: color(),
     calls: redisCall.concat([{ node: 'mysql', read: 20 }]), evidence: ['routes/web.php (' + f.routes.web + ' rute)'] });
-  if (f.heavyLoops.length) workloads.push({ id: 'admin_report', label: 'Laporan admin berat (loop query)', client: 'admin', pool: 'fpm', rate: 0.3, rateAssumed: true, cpuMs: 200, color: color(),
+  if (f.heavyLoops.length) workloads.push({ id: 'admin_report', label: 'Laporan admin berat (loop query)', client: 'admin', pool: 'fpm', rate: 0.3, rateAssumed: true, cpuAssumed: true, cpuMs: 200, color: color(),
     calls: [{ node: 'mysql', read: 30 }, { node: 'mysql', read: 800, tag: 'report_loop' }], evidence: f.heavyLoops });
   if (f.drivers.queue !== 'sync') {
     nodes.push({ id: 'workers', type: 'client', label: 'Queue worker', icon: 'gear' });
-    workloads.push({ id: 'queue_jobs', label: 'Antrean (' + Object.keys(f.queues).length + ' queue, ' + f.jobs.length + ' job)', client: 'workers', async: true, rate: 2, rateAssumed: true, color: color(), calls: [{ node: 'mysql', write: true, kb: 16 }], evidence: ['app/Jobs (' + f.jobs.length + ' job)', 'queue: ' + Object.keys(f.queues).join(', ')] });
+    workloads.push({ id: 'queue_jobs', label: 'Antrean (' + Object.keys(f.queues).length + ' queue, ' + f.jobs.length + ' job)', client: 'workers', async: true, rate: 2, rateAssumed: true, cpuAssumed: true, color: color(), calls: [{ node: 'mysql', write: true, kb: 16 }], evidence: ['app/Jobs (' + f.jobs.length + ' job)', 'queue: ' + Object.keys(f.queues).join(', ')] });
   }
   return { schema: 1, name: path.basename(root) + ' (saat ini)', stack: [stack.name, stack.php ? 'PHP ' + stack.php : null, f.drivers.db].filter(Boolean), nodes: nodes, workloads: workloads, faults: [] };
 }
@@ -170,7 +170,7 @@ function buildGeneric(root, stack, env) {
   return { schema: 1, name: path.basename(root) + ' (saat ini)', stack: [stack.name], faults: [],
     nodes: [{ id: 'user', type: 'client', label: 'Pengguna', icon: 'monitor' }, { id: 'lb', type: 'proxy', label: 'Gateway', timeoutS: 30 }, { id: 'app', type: 'pool', label: 'Aplikasi (' + stack.name + ')', workers: 16, assumed: ['workers'] },
       { id: 'db', type: 'db', label: 'Database ' + dbType, connections: 100, flush: 1, group: true, disk: 'storage', assumed: ['connections'] }, { id: 'storage', type: 'disk', label: 'Penyimpanan', fsyncMs: 8, bwMBs: 100, amp: 1, assumed: ['fsyncMs'] }],
-    workloads: [{ id: 'web', label: 'Request web', client: 'user', pool: 'app', rate: 30, rateAssumed: true, cpuMs: 30, color: COLORS[0], calls: [{ node: 'db', read: 5, write: true }], evidence: ['tumpukan ' + stack.name + ' terdeteksi; detail belum dianalisis'] }] };
+    workloads: [{ id: 'web', label: 'Request web', client: 'user', pool: 'app', rate: 30, rateAssumed: true, cpuAssumed: true, cpuMs: 30, color: COLORS[0], calls: [{ node: 'db', read: 5, write: true }], evidence: ['tumpukan ' + stack.name + ' terdeteksi; detail belum dianalisis'] }] };
 }
 
 function mergeObserved(arch, observed) {

@@ -18,6 +18,7 @@ import { Playbar, Timeline, usePlayback } from './Playback';
 import { Stage, fmtRate } from './Stage';
 import { labQ } from './queries';
 import { scenarioReducer } from './scenario';
+import { WorkloadPanel } from './WorkloadPanel';
 import type { LabBottlenecks, LabFrame, LabProject, LabRun, Scenario } from './types';
 
 type View = 'exp' | 'base' | 'split';
@@ -119,7 +120,12 @@ function LabBody({ project, foldersEnabled }: { project: LabProject; foldersEnab
             {tab === 'komponen' && <Palette catalog={project.catalog} actions={ready.actions} onApply={(component, params) => act({ type: 'setComponent', component, params })} onRemove={(key) => act({ type: 'removeAction', key })} />}
             {tab === 'beban' && <LoadPanel scenario={ready} project={project} onLoad={(load) => act({ type: 'setLoad', load })} onSeconds={(seconds) => act({ type: 'setSeconds', seconds })} onFaults={(on) => act({ type: 'setFaults', on })} onFailure={(failure) => act({ type: 'setFailure', failure })} />}
             {tab === 'rekomendasi' && <Recommendations recs={project.recs} actions={ready.actions} onToggle={(id) => act({ type: 'toggleRec', id })} />}
-            {tab === 'asumsi' && <EstimatePanel project={project} scenario={ready} onApply={(estimates) => act({ type: 'setEstimates', estimates })} />}
+            {tab === 'asumsi' && (
+              <>
+                <WorkloadPanel project={project} scenario={ready} onLoad={(load) => act({ type: 'setLoad', load })} onEstimates={(estimates) => act({ type: 'setEstimates', estimates })} />
+                <EstimatePanel project={project} scenario={ready} onApply={(estimates) => act({ type: 'setEstimates', estimates })} />
+              </>
+            )}
             {tab === 'skenario' && <Designs scenario={ready} onLoad={(d) => act({ type: 'restore', scenario: { project: d.project, actions: d.actions, load: d.load, seconds: d.seconds, faults: d.faults, failure: d.failure ?? null } })} />}
           </div>
           <Note>Model ini menyederhanakan kenyataan (lihat "Asumsi model" di tiap komponen). Pakai untuk membandingkan pilihan, bukan memprediksi angka persis.</Note>

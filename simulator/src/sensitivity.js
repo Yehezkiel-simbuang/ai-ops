@@ -20,7 +20,7 @@ const clone = function (o) { return JSON.parse(JSON.stringify(o)); };
 function perturb(arch, rnd) {
   const a = clone(arch), pick = function () { return FACTORS[Math.floor(rnd() * FACTORS.length)]; };
   a.workloads.forEach(function (w) {
-    if (w.cpuMs) w.cpuMs = w.cpuMs * pick();
+    if (w.cpuMs && w.cpuAssumed !== false) w.cpuMs = w.cpuMs * pick();   // cpuAssumed:false = diisi pengguna, tidak divariasikan
     (w.calls || []).forEach(function (c) { if (c.ms) c.ms = c.ms * pick(); if (c.read) c.read = c.read * pick(); });
   });
   a.nodes.forEach(function (n) {

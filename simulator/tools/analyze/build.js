@@ -31,7 +31,7 @@ function build(root, facts, infra, env) {
 
   if (!backs.length) { // hanya frontend / situs statis
     nodes.push({ id: 'static', type: 'pool', label: 'Server file statis' + (fronts[0] ? ' (' + fronts[0].name + ')' : ''), workers: 1000, cores: 0, assumed: ['workers'] });
-    workloads.push({ id: 'pages', label: 'Muat halaman & aset', client: 'users', pool: 'static', rate: 40, rateAssumed: true, cpuMs: 1, color: color(), calls: [], evidence: ['hanya frontend terdeteksi (tidak ada backend)'] });
+    workloads.push({ id: 'pages', label: 'Muat halaman & aset', client: 'users', pool: 'static', rate: 40, rateAssumed: true, cpuAssumed: true, cpuMs: 1, color: color(), calls: [], evidence: ['hanya frontend terdeteksi (tidak ada backend)'] });
     return { schema: 1, name: path.basename(root) + ' (saat ini)', stack: fronts.map(function (f) { return f.name; }), nodes: nodes, workloads: workloads, faults: [], smells: [], notes: ['Proyek ini frontend saja; beban ada di CDN/server statis dan API pihak ketiga.'] };
   }
 
@@ -65,12 +65,12 @@ function build(root, facts, infra, env) {
     const cacheCall = cacheId ? [{ node: cacheId, ms: 1 }] : [];
     const ev = ['rute terdeteksi: ' + f.routes].concat(f.evidence);
     if (dbId) {
-      workloads.push({ id: 'read' + suffix, label: prefix + 'Baca data (GET)', client: 'users', pool: pid, rate: 30, rateAssumed: true, cpuMs: f.model === 'event-loop' ? 8 : 25, color: color(), calls: cacheCall.concat([{ node: dbId, read: 4 }]), evidence: ev });
-      workloads.push({ id: 'write' + suffix, label: prefix + 'Tulis data (POST/PUT)', client: 'users', pool: pid, rate: 6, rateAssumed: true, cpuMs: f.model === 'event-loop' ? 12 : 40, color: color(), calls: [{ node: dbId, read: 4 }, { node: dbId, write: true, kb: 8 }], evidence: ev });
-    } else workloads.push({ id: 'req' + suffix, label: prefix + 'Request API', client: 'users', pool: pid, rate: 30, rateAssumed: true, cpuMs: 20, color: color(), calls: cacheCall, evidence: ev.concat(['tidak ada database terdeteksi']) });
+      workloads.push({ id: 'read' + suffix, label: prefix + 'Baca data (GET)', client: 'users', pool: pid, rate: 30, rateAssumed: true, cpuAssumed: true, cpuMs: f.model === 'event-loop' ? 8 : 25, color: color(), calls: cacheCall.concat([{ node: dbId, read: 4 }]), evidence: ev });
+      workloads.push({ id: 'write' + suffix, label: prefix + 'Tulis data (POST/PUT)', client: 'users', pool: pid, rate: 6, rateAssumed: true, cpuAssumed: true, cpuMs: f.model === 'event-loop' ? 12 : 40, color: color(), calls: [{ node: dbId, read: 4 }, { node: dbId, write: true, kb: 8 }], evidence: ev });
+    } else workloads.push({ id: 'req' + suffix, label: prefix + 'Request API', client: 'users', pool: pid, rate: 30, rateAssumed: true, cpuAssumed: true, cpuMs: 20, color: color(), calls: cacheCall, evidence: ev.concat(['tidak ada database terdeteksi']) });
     f.external.forEach(function (e) {
       const c = { node: 'ext_' + slug(e.host), ms: 900 }; if (f.noTimeout) c.noTimeout = true;
-      workloads.push({ id: 'ext_' + slug(e.host) + suffix, label: prefix + 'Panggil ' + hostLabel(e.host), client: 'users', pool: pid, rate: 1, rateAssumed: true, cpuMs: 30, color: color(),
+      workloads.push({ id: 'ext_' + slug(e.host) + suffix, label: prefix + 'Panggil ' + hostLabel(e.host), client: 'users', pool: pid, rate: 1, rateAssumed: true, cpuAssumed: true, cpuMs: 30, color: color(),
         calls: (dbId ? [{ node: dbId, read: 3 }] : []).concat([c]).concat(dbId ? [{ node: dbId, write: true, kb: 4 }] : []), evidence: e.files.concat(f.noTimeout ? ['panggilan HTTP tanpa timeout terdeteksi'] : []) });
     });
     f.queues.forEach(function (q) {
@@ -78,7 +78,7 @@ function build(root, facts, infra, env) {
       const wid = 'worker_' + slug(q.kind);
       nodes.push({ id: wid, type: 'pool', label: 'Konsumen antrean (' + q.kind + ')', workers: q.concurrency || 4, cores: 0, assumed: q.concurrency ? [] : ['workers'] });
       nodes.push({ id: 'producer_' + slug(q.kind), type: 'client', label: 'Produsen pekerjaan', icon: 'gear' });
-      workloads.push({ id: 'jobs_' + slug(q.kind), label: 'Pekerjaan latar (' + q.kind + ')', client: 'producer_' + slug(q.kind), pool: wid, async: true, rate: 3, rateAssumed: true, color: color(),
+      workloads.push({ id: 'jobs_' + slug(q.kind), label: 'Pekerjaan latar (' + q.kind + ')', client: 'producer_' + slug(q.kind), pool: wid, async: true, rate: 3, rateAssumed: true, cpuAssumed: true, color: color(),
         calls: (f.external[0] ? [{ node: 'ext_' + slug(f.external[0].host), ms: 600 }] : []).concat(dbId ? [{ node: dbId, read: 4 }, { node: dbId, write: true, kb: 8 }] : []), evidence: ['antrean ' + q.kind + (q.concurrency ? ' concurrency=' + q.concurrency : ' (concurrency diasumsikan)')] });
     });
   });

@@ -262,5 +262,12 @@ t('yang diukur tidak divariasikan; yang ditandai asumsi divariasikan', function 
   assert(changed, 'worker asumsi berubah pada sebagian variasi');
 });
 
+t('waktu CPU yang diisi pengguna (cpuAssumed:false) tidak divariasikan; yang tebakan divariasikan', function () {
+  const a = JSON.parse(JSON.stringify(toko)); a.workloads[0].cpuMs = 10; a.workloads[0].cpuAssumed = false; a.workloads[1].cpuMs = 10; a.workloads[1].cpuAssumed = true;
+  const rnd = Sens.mulberry32(11); let guessChanged = false;
+  for (let i = 0; i < 10; i++) { const p = Sens.perturb(a, rnd); assert.strictEqual(p.workloads[0].cpuMs, 10, 'nilai pengguna tetap'); if (p.workloads[1].cpuMs !== 10) guessChanged = true; }
+  assert(guessChanged, 'cpuMs tebakan berubah pada sebagian variasi');
+});
+
 console.log('\n' + pass + ' lolos, ' + fail + ' gagal');
 process.exit(fail ? 1 : 0);
