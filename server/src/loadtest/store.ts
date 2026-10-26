@@ -3,7 +3,10 @@
 import { HttpError, audit, bad, db } from '../context.js';
 import { open, seal } from '../crypto.js';
 import { analyze, type Analysis, type StageRow } from './analysis.js';
-import { analyzeWithLimits as analyze_ } from '../playground/compose.js';
+import { analyzeWithLimits as analyze_, serviceLimits } from '../playground/compose.js';
+import { architecture, type Architecture } from './roles.js';
+import { bottleneck, type BottleneckReport, type Limit, type Sample } from './bottleneck.js';
+import * as Sampler from './sampler.js';
 import { checkTarget } from './safety.js';
 import { MAX_GEN_CPU, type CreateInput, type Criteria, type LoadRequest, type LoadStage, type StageReport } from './schema.js';
 
@@ -13,9 +16,10 @@ export interface TestRow {
   id: number; name: string; target: string; allow_public: boolean; scenario: Scenario; headers_enc: string; stages: LoadStage[]; criteria: Criteria; scrape: Array<{ label: string; url: string; metric: string }>;
   status: TestStatus; cancel_requested: boolean; error: string; runner: { k6: string; cpus: number; version: string } | null; approved_by: string;
   created: number; started: number | null; finished: number | null; heartbeat: number | null; setup: SetupSummary | null;
+  playground_id: number | null;
   ai_status: '' | 'running' | 'done' | 'failed'; ai_text: string; ai_model: string; ai_error: string; ai_ts: number | null;
 }
-export interface SetupSummary { name: string; services: Array<{ name: string; image: string }>; limits: string[] }
+export interface SetupSummary { name: string; services: Array<{ name: string; image: string; published?: boolean; limit?: Limit }>; limits: string[] }
 export interface StageDb extends StageRow { reqs: number; p50: number; p99: number; scraped: Record<string, { avg: number; max: number; last: number }>; started: number; ended: number }
 
 /** Bentuk untuk UI: tanpa header terenkripsi. */
@@ -30,18 +34,28 @@ const view = (t: TestRow) => {
 const stageRows = (test_id: number) => db().query<StageDb & { err_pct: number; gen_cpu: number }>('SELECT idx, vus, seconds, reqs, rps, p50, p95, p99, err_pct, gen_cpu, valid, scraped, started, ended FROM load_stages WHERE test_id=$1 ORDER BY idx', [test_id])
   .then((rs) => rs.map((r) => ({ ...r, errPct: r.err_pct, genCpu: r.gen_cpu })));
 
+/** Ringkasan susunan Playground (komponen, titik masuk, batas sumber daya) yang disalin ke uji; null bila susunannya tidak ada. */
+export async function setupOf(playgroundId: number): Promise<SetupSummary | null> {
+  const p = await db().one<{ name: string; compose_enc: string }>('SELECT name, compose_enc FROM playground_deploys WHERE id=$1', [playgroundId]);
+  if (!p) return null;
+  const text = open(p.compose_enc), a = analyze_(text), lim = serviceLimits(text);
+  return { name: p.name, services: a.services.map((s) => ({ name: s.name, image: s.image, published: a.publish.some((x) => x.service === s.name), ...(lim[s.name] ? { limit: lim[s.name] } : {}) })), limits: a.limits };
+}
+
+/** Untuk formulir uji baru: susunan Playground yang akan diuji beserta arsitekturnya (tanpa menyimpan apa pun). */
+export async function preview(playgroundId: number): Promise<{ setup: SetupSummary; architecture: Architecture } | null> {
+  const setup = Number.isInteger(playgroundId) && playgroundId > 0 ? await setupOf(playgroundId) : null;
+  return setup ? { setup, architecture: architecture(setup.services) } : null;
+}
+
 export async function create(input: CreateInput, user: string, allowedHosts: string[]) {
   const t = checkTarget(input.target, allowedHosts);
   for (const s of input.scrape) checkTarget(s.url, allowedHosts, true);   // alamat metrik juga hanya ke jaringan yang boleh
   const scenario: Scenario = { requests: input.requests, thinkSeconds: input.thinkSeconds, headerNames: Object.keys(input.headers) };
-  let setup: SetupSummary | null = null;
-  if (input.playgroundId) {
-    const p = await db().one<{ name: string; compose_enc: string }>('SELECT name, compose_enc FROM playground_deploys WHERE id=$1', [input.playgroundId]);
-    if (p) { const a = analyze_(open(p.compose_enc)); setup = { name: p.name, services: a.services.map((s) => ({ name: s.name, image: s.image })), limits: a.limits }; }
-  }
+  const setup = input.playgroundId ? await setupOf(input.playgroundId) : null;
   const row = await db().one<TestRow>(
-    'INSERT INTO load_tests(name,target,allow_public,scenario,headers_enc,stages,criteria,scrape,created,setup) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
-    [input.name, t.origin, t.allowPublic, JSON.stringify(scenario), Object.keys(input.headers).length ? seal(JSON.stringify(input.headers)) : '', JSON.stringify(input.stages), JSON.stringify(input.criteria), JSON.stringify(input.scrape), Date.now(), setup ? JSON.stringify(setup) : null]
+    'INSERT INTO load_tests(name,target,allow_public,scenario,headers_enc,stages,criteria,scrape,created,setup,playground_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
+    [input.name, t.origin, t.allowPublic, JSON.stringify(scenario), Object.keys(input.headers).length ? seal(JSON.stringify(input.headers)) : '', JSON.stringify(input.stages), JSON.stringify(input.criteria), JSON.stringify(input.scrape), Date.now(), setup ? JSON.stringify(setup) : null, setup ? input.playgroundId ?? null : null]
   );
   await audit(user, 'loadtest.buat', `${input.name} -> ${t.origin}`);
   return view(row!);
@@ -56,11 +70,18 @@ export async function list() {
   });
 }
 
-export async function get(id: number) {
+/** Dengan insight=true, hasilnya membawa arsitektur dan analisis bottleneck (dihitung dari data tersimpan). */
+export async function get(id: number, insight = false) {
   const t = await db().one<TestRow>('SELECT * FROM load_tests WHERE id=$1', [id]);
   if (!t) throw new HttpError(404, 'Uji beban tidak ada');
   const stages = await stageRows(id);
-  return { ...view(t), plan: t.stages, stages, analysis: analyze(stages, t.criteria, t.status === 'done') };   // plan = rencana tahap; stages = hasil yang sudah dilaporkan
+  const base = { ...view(t), plan: t.stages, stages, analysis: analyze(stages, t.criteria, t.status === 'done') };   // plan = rencana tahap; stages = hasil yang sudah dilaporkan
+  if (!insight) return base;
+  const arch: Architecture | null = t.setup?.services?.length ? architecture(t.setup.services) : null;
+  const samples = await db().query<Sample>('SELECT ts, service, cpu, mem_mb, mem_limit_mb, cores FROM load_samples WHERE test_id=$1 ORDER BY ts', [id]);
+  const limits = Object.fromEntries((t.setup?.services ?? []).filter((s) => s.limit).map((s) => [s.name, s.limit!]));
+  const report: BottleneckReport = bottleneck({ stages: stages as never, analysis: base.analysis, samples, arch, limits });
+  return { ...base, architecture: arch, bottleneck: report };
 }
 
 /** Beberapa uji berdampingan: ringkasan hasil dan susunan yang diuji, untuk membandingkan "sebelum dan sesudah". */
@@ -125,6 +146,7 @@ export async function claim(info: TestRow['runner']): Promise<Job | null> {
     [now, info ? JSON.stringify(info) : null]
   );
   if (!t) return null;
+  if (t.playground_id) Sampler.start(t.id);   // catat pemakaian tiap komponen selama uji berjalan
   const headers = t.headers_enc ? (JSON.parse(open(t.headers_enc) || '{}') as Record<string, string>) : {};
   return { id: t.id, target: t.target, allowPublic: t.allow_public, requests: t.scenario.requests, thinkSeconds: t.scenario.thinkSeconds, headers, stages: t.stages, scrape: t.scrape };
 }

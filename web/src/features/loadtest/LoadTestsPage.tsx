@@ -1,13 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Async } from '@/components/ui/Async';
 import { Badge, type Tone } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Empty, Hint, Item, List, PageHead } from '@/components/ui/Layout';
 import { IconGauge, IconInfo, IconPlus } from '@/components/icons';
 import { ago } from '@/lib/format';
-import { NewLoadTestForm } from './NewLoadTestForm';
 import { loadQ } from './queries';
 import type { LoadTestStatus, TestStatus } from './types';
 
@@ -24,19 +23,18 @@ function RunnerStatus({ status }: { status: LoadTestStatus | undefined }) {
 }
 
 export function LoadTestsPage() {
-  const [params] = useSearchParams(), prefill = { target: params.get('target') ?? undefined, name: params.get('nama') ?? undefined, playgroundId: Number(params.get('pg')) || undefined };   // dari halaman Playground
-  const [creating, setCreating] = useState(!!prefill.target), navigate = useNavigate(), [picked, setPicked] = useState<number[]>([]);
+  const [params] = useSearchParams(), navigate = useNavigate(), [picked, setPicked] = useState<number[]>([]);
   const toggle = (id: number) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length < 4 ? [...p, id] : p));
   const status = useQuery(loadQ.status()), list = useQuery(loadQ.list());
+  if (params.get('target')) return <Navigate to={`/uji-beban/baru?${params.toString()}`} replace />;   // dari tombol Uji beban di Playground: lanjut ke halaman uji baru dengan isian terisi
   return (
     <>
       <PageHead title="Uji beban" icon={IconGauge}>
         {picked.length >= 2 && <Button onClick={() => navigate(`/uji-beban/banding?ids=${picked.join(',')}`)}>Bandingkan ({picked.length})</Button>}
-        <Button primary icon={IconPlus} disabled={!status.data?.enabled} onClick={() => setCreating(true)}>Uji baru</Button>
+        <Button primary icon={IconPlus} disabled={!status.data?.enabled} onClick={() => navigate('/uji-beban/baru')}>Uji baru</Button>
       </PageHead>
       <p className="note" style={{ marginBottom: 12 }}>Menaikkan beban bertahap ke server uji (bukan produksi) dan mencatat di mana ia mulai tidak sehat. Hasilnya <b>terukur</b>, bukan perkiraan. Tiap uji menunggu persetujuan Anda sebelum berjalan.</p>
       <RunnerStatus status={status.data} />
-      {creating && <div style={{ marginBottom: 18 }}><NewLoadTestForm status={status.data} prefill={prefill} onCreated={(id) => navigate(`/uji-beban/${id}`)} onCancel={() => setCreating(false)} /></div>}
       <Async query={list}>{(tests) => tests.length ? (
         <List>{tests.map((t) => {
           const [tone, label] = STATUS_BADGE[t.status];

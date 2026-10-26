@@ -25,7 +25,18 @@ export type LoadTestListItem = LoadTest & { stageCount: number; analysis: Analys
 /** Detail: `plan` = rencana tahap; `stages` = hasil yang sudah dilaporkan runner. */
 /** Penjelasan AI dikerjakan di server dan disimpan; null = belum pernah diminta. */
 export interface AiExplanation { status: 'running' | 'done' | 'failed'; text: string; model: string; error: string; ts: number | null }
-export type LoadTestDetail = Omit<LoadTest, 'stages'> & { plan: LoadStage[]; stages: StageResult[]; analysis: Analysis; ai: AiExplanation | null };
+/** Arsitektur susunan yang diuji dan analisis bottleneck (hanya ada di detail satu uji). */
+export type Role = 'proxy' | 'app' | 'db' | 'cache' | 'queue' | 'vector' | 'search';
+export interface ArchNode { name: string; image: string; role: Role; entry: boolean }
+export interface ArchEdge { from: string; to: string; label: string }
+export interface Placement { a: Role; b: Role; relation: 'sama' | 'beda' | 'bebas'; why: string; condition?: string }
+export interface ServerBox { id: string; label: string; note: string; nodes: Array<Pick<ArchNode, 'name' | 'image' | 'role'>> }
+export interface Architecture { nodes: ArchNode[]; edges: ArchEdge[]; placements: Placement[]; current: ServerBox[]; advised: ServerBox[]; changed: boolean; notes: string[] }
+export type Confidence = 'terukur' | 'kuat' | 'dugaan';
+export interface Finding { component: string; role: Role | 'host' | 'generator' | 'tidak diketahui'; confidence: Confidence; title: string; evidence: string[]; advice: string[]; score: number }
+export interface UsageRow { service: string; role: Role | 'host'; stages: Array<{ idx: number; vus: number; cpu: number | null; mem: number | null }> }
+export interface BottleneckReport { basis: 'terukur' | 'perkiraan'; stageIdx: number | null; headline: string; findings: Finding[]; usage: UsageRow[]; cautions: string[] }
+export type LoadTestDetail = Omit<LoadTest, 'stages'> & { plan: LoadStage[]; stages: StageResult[]; analysis: Analysis; ai: AiExplanation | null; architecture?: Architecture | null; bottleneck?: BottleneckReport };
 
 export interface LoadTestStatus { enabled: boolean; allowedHosts: string[]; runner: { online: boolean; lastSeen: number | null; info: { k6: string; cpus: number; version: string } | null } }
 

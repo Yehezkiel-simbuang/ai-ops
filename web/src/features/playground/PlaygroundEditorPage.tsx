@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { q, useAction } from '@/api/queries';
 import type { Server } from '@/api/types';
 import { Async } from '@/components/ui/Async';
+import { Step } from '@/components/ui/Step';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
@@ -23,19 +24,6 @@ type Start = string | 'builder' | 'yaml' | null;
 
 /** Sama dengan aturan di server (service.ts); diperiksa di sini supaya kesalahannya terlihat sebelum Simpan. */
 export const NAME_RE = /^[\w .-]+$/;
-
-function Step({ n, title, hint, children }: { n: number; title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <section className="pg-step">
-      <div className="pg-num" aria-hidden>{n}</div>
-      <div className="pg-body">
-        <h2>{title}</h2>
-        {hint && <p className="lbl" style={{ marginTop: 0 }}>{hint}</p>}
-        {children}
-      </div>
-    </section>
-  );
-}
 
 function Choice({ label, description, parts, selected, onPick }: { label: string; description: string; parts?: string[]; selected: boolean; onPick: () => void }) {
   return (

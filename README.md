@@ -67,7 +67,7 @@ AI Ops adalah aplikasi web yang dijalankan sendiri (self-hosted) untuk orang yan
 ### Menguji arsitektur
 - **Lab arsitektur**: gambar arsitektur (Redis, load balancer, replika database, antrean, CDN), ubah beban, dan lihat dampaknya di simulator. Ini perkiraan, bukan pengukuran.
 - **Playground**: pasang susunan Docker Compose sungguhan di server uji lewat halaman penyusun (pilih contoh, rakit dari image aplikasi Anda, atau tempel YAML), lalu copot bila selesai.
-- **Uji beban** dengan k6 sungguhan: naikkan beban bertahap, temukan di mana mulai tidak sehat, dan bandingkan hasil antar uji. AI dapat menjelaskan hasilnya; penjelasan dikerjakan di server dan tersimpan.
+- **Uji beban** dengan k6 sungguhan: naikkan beban bertahap, temukan di mana mulai tidak sehat, dan bandingkan hasil antar uji. Dari susunan Playground, hasilnya menunjuk **komponen mana yang jenuh** (CPU dan memori tiap kontainer dicatat selama uji), menggambar arsitekturnya, dan menyarankan **mana yang sebaiknya satu server yang sama dan mana yang di server berbeda**. AI dapat menjelaskan hasilnya; penjelasan dikerjakan di server dan tersimpan.
 
 ## Yang tidak dilakukan (supaya tidak salah harap)
 - Tidak menjalankan perintah yang mengubah sistem tanpa persetujuan Anda, dan tidak merestart layanan atau me-reboot server sendiri.

@@ -9,10 +9,12 @@ import { Button } from '@/components/ui/Button';
 import { Progress } from '@/components/ui/Charts';
 import { DataTable } from '@/components/ui/DataTable';
 import { Hint, Note, PageHead, Section } from '@/components/ui/Layout';
-import { IconAlert, IconBan, IconCheck, IconCopy, IconGauge, IconPulse, IconSpark, IconTrash } from '@/components/icons';
+import { IconAlert, IconBan, IconCheck, IconCopy, IconGauge, IconLayers, IconPulse, IconSpark, IconTrash } from '@/components/icons';
 import { del, post } from '@/lib/api';
 import { ago, dateTime } from '@/lib/format';
 import { peakVus, totalSeconds } from './form';
+import { ArchitectureView } from './ArchitectureView';
+import { BottleneckPanel } from './BottleneckPanel';
 import { P95Chart, ThroughputChart } from './StageCharts';
 import { STATUS_BADGE } from './LoadTestsPage';
 import { isActive, loadQ } from './queries';
@@ -44,6 +46,8 @@ function Results({ t }: { t: LoadTestDetail }) {
         <div className="panel"><h2><IconPulse size={16} aria-hidden />Waktu respons p95</h2><P95Chart stages={t.stages} criteria={t.criteria} kneeVus={a.knee?.vus} /><div className="lbl">sumbu X = pengguna per tahap; garis merah = batas {t.criteria.p95Ms} ms</div></div>
         <div className="panel"><h2><IconGauge size={16} aria-hidden />Throughput</h2><ThroughputChart stages={t.stages} /><div className="lbl">request per detik yang berhasil dilayani</div></div>
       </div>
+      {t.status === 'done' && t.bottleneck && t.stages.length > 0 && <Section title="Di mana bottleneck-nya" icon={IconAlert}><BottleneckPanel report={t.bottleneck} /></Section>}
+      {t.architecture && t.stages.length > 0 && <Section title="Arsitektur dan penempatan komponen" icon={IconLayers}><ArchitectureView arch={t.architecture} /></Section>}
       <Section title="Hasil per tahap" icon={IconGauge}>
         <DataTable textCols={1} heads={['Tahap', 'Pengguna', 'Req/dtk', 'p50', 'p95', 'p99', 'Error', 'CPU pembangkit']} empty="Belum ada tahap yang selesai."
           rows={t.stages.map((s) => [

@@ -188,7 +188,7 @@ describe('perbandingan uji dan ringkasan susunan', () => {
       const srv = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'pg', host: '10.1.1.1', username: 'a', playground: true })).json.id;
       const pg = (await h.call('POST', '/api/playground', { server_id: srv, name: 'dgn-redis', compose: 'services:\n  app:\n    image: x:1\n    ports: ["8080:80"]\n    deploy: {resources: {limits: {cpus: "0.5", memory: 512m}}}\n' })).json;
       const a = await mk('A', pg.id), b = await mk('B');
-      expect(a.setup).toEqual({ name: 'dgn-redis', services: [{ name: 'app', image: 'x:1' }], limits: ['app: 0.5 CPU, 512m'] }); expect(b.setup).toBeNull();
+      expect(a.setup).toEqual({ name: 'dgn-redis', services: [{ name: 'app', image: 'x:1', published: true, limit: { cpus: 0.5, memMb: 512 } }], limits: ['app: 0.5 CPU, 512m'] }); expect(b.setup).toBeNull();
       const c = await h.call('GET', `/api/loadtests/compare?ids=${a.id},${b.id}`); expect(c.status).toBe(200); expect(c.json.map((x: { name: string }) => x.name)).toEqual(['A', 'B']); expect(c.json[0].setup.name).toBe('dgn-redis');
       expect((await h.call('GET', `/api/loadtests/compare?ids=${a.id}`)).status).toBe(400); expect((await h.call('GET', '/api/loadtests/compare')).status).toBe(400);
     } finally { await h.close(); }

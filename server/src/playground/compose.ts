@@ -88,3 +88,19 @@ export function targetPort(a: ComposeAnalysis, wanted: number): number | null {
   if (wanted && a.publish.some((p) => p.host === wanted)) return wanted;
   return a.publish[0]?.host ?? null;
 }
+
+const MEM = /^(\d+(?:\.\d+)?)\s*([kmg]?)b?$/i;
+const toMb = (v: string): number | undefined => { const m = MEM.exec(String(v).trim()); if (!m) return undefined; const n = Number(m[1]), u = (m[2] ?? '').toLowerCase(); return u === 'g' ? n * 1024 : u === 'k' ? n / 1024 : n; };
+/** Batas CPU (jumlah core) dan memori (MB) per layanan, bila compose menetapkannya. Dipakai untuk menilai seberapa penuh sebuah komponen. */
+export function serviceLimits(text: string): Record<string, { cpus?: number; memMb?: number }> {
+  const out: Record<string, { cpus?: number; memMb?: number }> = {};
+  try {
+    const d = parse(text) as { services?: Record<string, { deploy?: { resources?: { limits?: Record<string, string> } } }> };
+    for (const [n, s] of Object.entries(d.services ?? {})) {
+      const l = s?.deploy?.resources?.limits; if (!l) continue;
+      const cpus = Number(l.cpus), memMb = l.memory ? toMb(l.memory) : undefined;
+      out[n] = { ...(Number.isFinite(cpus) && cpus > 0 ? { cpus } : {}), ...(memMb ? { memMb } : {}) };
+    }
+  } catch { /* sudah dilaporkan analyze */ }
+  return out;
+}

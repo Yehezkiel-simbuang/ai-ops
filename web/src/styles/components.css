@@ -250,3 +250,34 @@ button.tpl[aria-pressed="true"] { border-color: var(--accent); background: var(-
 button.tpl:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .tpl-chosen { display: grid; gap: 6px; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 5px 5px 0; }
 .tpl-chosen p { margin: 0; }
+
+/* Arsitektur dan bottleneck pada hasil uji beban. */
+.arch-pair { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.arch-pair h3 { margin: 0 0 8px; font-size: .95rem; }
+.arch-scroll { overflow-x: auto; }
+.arch-server { fill: var(--panel-2); stroke: var(--line-strong); stroke-width: 1.5; }
+.arch-server-label { fill: var(--ink); font-size: 13px; font-weight: 600; paint-order: stroke; stroke: var(--panel-2); stroke-width: 5px; stroke-linejoin: round; }
+.arch-edge-label { fill: var(--accent); font-size: 11px; font-weight: 600; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+.arch-node rect { fill: var(--panel); stroke-width: 2; }
+.arch-name { fill: var(--ink); font-size: 13px; font-weight: 600; }
+.arch-role { fill: var(--muted); font-size: 11px; }
+.arch-edge { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+.arch-edge.cross { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 7 5; }
+.arch-arrowhead { fill: var(--muted); }
+.role-proxy rect, .arch-swatch.role-proxy { stroke: var(--info); } .role-app rect, .arch-swatch.role-app { stroke: var(--accent); }
+.role-db rect, .arch-swatch.role-db { stroke: var(--ok); } .role-cache rect, .arch-swatch.role-cache { stroke: var(--warn); }
+.role-queue rect, .arch-swatch.role-queue { stroke: var(--c-in); } .role-vector rect, .arch-swatch.role-vector { stroke: var(--bad); }
+.role-search rect, .arch-swatch.role-search { stroke: var(--muted); }
+.arch-node.role-proxy rect { fill: color-mix(in srgb, var(--info) 14%, var(--panel)); } .arch-node.role-app rect { fill: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
+.arch-node.role-db rect { fill: color-mix(in srgb, var(--ok) 14%, var(--panel)); } .arch-node.role-cache rect { fill: color-mix(in srgb, var(--warn) 14%, var(--panel)); }
+.arch-node.role-queue rect { fill: color-mix(in srgb, var(--c-in) 14%, var(--panel)); } .arch-node.role-vector rect { fill: color-mix(in srgb, var(--bad) 14%, var(--panel)); }
+.arch-node.role-search rect { fill: color-mix(in srgb, var(--muted) 14%, var(--panel)); }
+.arch-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.arch-legend svg { vertical-align: middle; }
+.arch-swatch { display: inline-block; width: 12px; height: 12px; border: 2px solid; border-radius: 3px; vertical-align: -1px; }
+.finding { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0; background: var(--panel); padding: 10px 12px; display: grid; gap: 6px; }
+.finding ul { margin: 2px 0 0; padding-left: 18px; display: grid; gap: 2px; }
+td.heat { text-align: center; font-variant-numeric: tabular-nums; }
+td.heat.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); } td.heat.warn { background: color-mix(in srgb, var(--warn) 22%, transparent); } td.heat.bad { background: color-mix(in srgb, var(--bad) 26%, transparent); font-weight: 600; }
+.lt-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0 0 12px; font-size: .86rem; }
+.lt-summary dt { color: var(--muted); } .lt-summary dd { margin: 0; overflow-wrap: anywhere; }
