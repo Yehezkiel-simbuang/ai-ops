@@ -11,7 +11,7 @@ import * as Incidents from '../src/incidents.js';
 import * as Safety from '../src/safety.js';
 import * as Servers from '../src/servers.js';
 import * as Store from '../src/store.js';
-import { harness, login, sleep, until, type Harness } from './helpers.js';
+import { agentTs, harness, login, sleep, until, type Harness } from './helpers.js';
 
 let h: Harness, recv: http.Server, port = 0, binDir = '';
 const hooks: string[] = [];
@@ -23,8 +23,10 @@ const sshExec = (fail: (cmd: string) => number = () => 0) => async (_s: unknown,
 let seq = 0;
 const ev = (o: Partial<Incidents.AgentEvent> = {}) => ({ id: 'e' + ++seq + Math.random().toString(36).slice(2, 8), type: 'open', key: 'svc:nginx', title: 'Layanan nginx tidak aktif', kind: 'service', severity: 'critical', detail: 'status: failed', ts: Math.floor(Date.now() / 1000), diag: [{ name: 'systemctl status', out: 'nginx failed' }], ...o });
 
+// anti-replay menolak tanda tangan yang sama: tiap panggilan uji memakai detik berbeda (mundur, tetap di dalam jendela 5 menit) supaya kirim ulang isi yang sama tidak dianggap replay
+let tsSeq = 0;
 async function agentCall(method: string, path: string, body?: unknown, o: { key?: string; secret?: string; ts?: string; tamper?: boolean } = {}) {
-  const raw = body === undefined ? '' : JSON.stringify(body), ts = o.ts ?? String(Math.floor(Date.now() / 1000)), p = path.split('?')[0]!;
+  const raw = body === undefined ? '' : JSON.stringify(body), ts = o.ts ?? String(Math.floor(Date.now() / 1000) - (tsSeq++ % 280)), p = path.split('?')[0]!;
   const sig = Agents.signRequest(o.secret ?? secret, ts, method, p, raw);
   const r = await h.app.inject({ method: method as never, url: path, headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': o.key ?? keyId, 'x-aiops-ts': ts, 'x-aiops-sig': sig }, payload: o.tamper ? raw + ' ' : raw || undefined });
   let json: any = null; try { json = r.json(); } catch { /* */ }
@@ -192,7 +194,7 @@ describe('persetujuan dan eksekusi (jalur SSH)', () => {
   });
   it('tanpa jalur eksekusi, persetujuan ditolak dengan pesan jelas', async () => {
     const s2 = (await h.call('POST', '/api/servers', { key_path: '/k', exec_via: 'agent', name: 'tanpa-jalur', host: '10.2.2.2', username: 'ops' })).json.id; const a2 = await Agents.issue(s2);
-    const call2 = async (path: string, body: unknown) => { const raw = JSON.stringify(body), ts = String(Math.floor(Date.now() / 1000)); const r = await h.app.inject({ method: 'POST', url: path, headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': a2.keyId, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(a2.secret, ts, 'POST', path, raw) }, payload: raw }); return r.statusCode; };
+    const call2 = async (path: string, body: unknown) => { const raw = JSON.stringify(body), ts = agentTs(); const r = await h.app.inject({ method: 'POST', url: path, headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': a2.keyId, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(a2.secret, ts, 'POST', path, raw) }, payload: raw }); return r.statusCode; };
     await call2('/agent/v1/events', { events: [ev({ key: 'svc:x1', title: 'x' })] }); const i = (await incidents()).find((x) => x.server_name === 'tanpa-jalur'); await until(async () => (await h.call('GET', `/api/incidents/${i.id}`)).json.recommendations.length > 0);
     const rid = (await h.call('GET', `/api/incidents/${i.id}`)).json.recommendations[0].id; const r = await h.call('POST', `/api/recommendations/${rid}/approve`, {}); expect(r.status).toBe(400); expect(r.json.error).toMatch(/jalur eksekusi/);
   });
@@ -200,7 +202,7 @@ describe('persetujuan dan eksekusi (jalur SSH)', () => {
 
 describe('jalur agen (tanpa SSH): perintah bertanda tangan yang diambil agen', () => {
   let s3 = 0, k3 = '', sec3 = '';
-  const call3 = async (method: string, path: string, body?: unknown) => { const raw = body === undefined ? '' : JSON.stringify(body), ts = String(Math.floor(Date.now() / 1000)); const r = await h.app.inject({ method: method as never, url: path, headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': k3, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(sec3, ts, method, path.split('?')[0]!, raw) }, payload: raw || undefined }); return { status: r.statusCode, json: (() => { try { return r.json(); } catch { return null; } })() }; };
+  const call3 = async (method: string, path: string, body?: unknown) => { const raw = body === undefined ? '' : JSON.stringify(body), ts = agentTs(); const r = await h.app.inject({ method: method as never, url: path, headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': k3, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(sec3, ts, method, path.split('?')[0]!, raw) }, payload: raw || undefined }); return { status: r.statusCode, json: (() => { try { return r.json(); } catch { return null; } })() }; };
   beforeAll(async () => {
     s3 = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-natted', host: '10.3.3.3', username: 'ops', exec_via: 'agent' })).json.id; const a = await Agents.issue(s3); k3 = a.keyId; sec3 = a.secret;
     await call3('POST', '/agent/v1/heartbeat', { exec: true, v: 't', host: 'natted', hb: 60 });

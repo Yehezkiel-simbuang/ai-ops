@@ -39,7 +39,7 @@ export async function harness(env: Record<string, string> = {}): Promise<Harness
     NODE_ENV: 'test', DATABASE_URL: TEST_URL, DB_SCHEMA: schema, MASTER_KEY: randomBytes(32).toString('hex'), ADMIN_PASSWORD: ADMIN_PW,
     DATA_DIR: mkdtempSync(join(tmpdir(), 'aiops-d-')), PUBLIC_DIR: fakeUi(), ALLOWED_HOSTS: 'localhost,127.0.0.1', LOG_LEVEL: 'silent', ...env
   });
-  initCrypto(cfg.MASTER_KEY);
+  initCrypto(cfg.MASTER_KEY, cfg.masterKeyPrevious);
   const log = createLogger('silent'), db = new Db(cfg);
   setCtx({ db, cfg, log });
   await migrate(db, join(import.meta.dirname, '..', 'migrations'), () => undefined, schema);
@@ -66,3 +66,6 @@ export async function login(h: Harness): Promise<void> {
 }
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 export async function until<T>(fn: () => T | Promise<T>, ms = 5000): Promise<T | null> { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await fn(); if (v) return v; await sleep(25); } return null; }
+/** Detik untuk tanda tangan agen di uji: tiap panggilan berbeda (mundur, tetap di dalam jendela 5 menit) agar kirim ulang isi yang sama tidak ditolak sebagai replay. */
+let tsSeq = 0;
+export const agentTs = (): string => String(Math.floor(Date.now() / 1000) - (tsSeq++ % 280));

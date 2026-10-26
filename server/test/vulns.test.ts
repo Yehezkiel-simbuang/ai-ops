@@ -3,12 +3,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as Agents from '../src/agents.js';
 import * as Patching from '../src/patching.js';
 import * as Vulns from '../src/vulns.js';
-import { harness, login, type Harness } from './helpers.js';
+import { agentTs, harness, login, type Harness } from './helpers.js';
 
 let h: Harness, sid = 0, keyId = '', secret = '';
 
 async function patch(body: unknown) {
-  const raw = JSON.stringify(body), ts = String(Math.floor(Date.now() / 1000)), path = '/agent/v1/patch';
+  const raw = JSON.stringify(body), ts = agentTs(), path = '/agent/v1/patch';
   const r = await h.app.inject({ method: 'POST', url: path, headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': keyId, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(secret, ts, 'POST', path, raw) }, payload: raw });
   return { status: r.statusCode, json: r.json() };
 }

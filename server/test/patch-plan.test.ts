@@ -4,14 +4,14 @@ import * as Agents from '../src/agents.js';
 import { impactOf } from '../src/patch-plan.js';
 import { classify } from '../src/safety.js';
 import * as Servers from '../src/servers.js';
-import { harness, login, until, type Harness } from './helpers.js';
+import { agentTs, harness, login, until, type Harness } from './helpers.js';
 
 let h: Harness, sid = 0, keyId = '', secret = '';
 const sshLog: string[] = [];
 const sshExec = (fail: (cmd: string) => number = () => 0) => async (_s: unknown, cmd: string) => { sshLog.push(cmd); return { exitCode: fail(cmd), stdout: 'ok:' + cmd.slice(0, 30), stderr: '', ms: 1, timedOut: false }; };
 
 async function agent(path: string, body: unknown) {
-  const raw = JSON.stringify(body), ts = String(Math.floor(Date.now() / 1000));
+  const raw = JSON.stringify(body), ts = agentTs();
   const r = await h.app.inject({ method: 'POST', url: path, headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': keyId, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(secret, ts, 'POST', path, raw) }, payload: raw });
   return { status: r.statusCode, json: r.json() };
 }
@@ -133,7 +133,7 @@ describe('rencana patch', () => {
 
   it('lewat SSH dengan akun biasa tanpa sudo ditolak sejak awal (apt butuh root); root atau sudo menyala diterima', async () => {
     const s3 = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-biasa', host: '10.4.4.6', username: 'aiops', use_sudo: false })).json.id;
-    const a3 = (await h.call('POST', `/api/servers/${s3}/agent`, {})).json, ts = String(Math.floor(Date.now() / 1000)), raw = JSON.stringify(FACTS());
+    const a3 = (await h.call('POST', `/api/servers/${s3}/agent`, {})).json, ts = agentTs(), raw = JSON.stringify(FACTS());
     await h.app.inject({ method: 'POST', url: '/agent/v1/patch', headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': a3.keyId, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(a3.config.secret, ts, 'POST', '/agent/v1/patch', raw) }, payload: raw });
     const r = await h.call('POST', `/api/servers/${s3}/patch-plan`, {}); expect(r.status).toBe(400);
     expect(r.json.error).toMatch(/Akun SSH "aiops" bukan root dan opsi "Pakai sudo" mati/); expect(r.json.error).toMatch(/nyalakan eksekusi di agen/);
@@ -145,7 +145,7 @@ describe('rencana patch', () => {
 
   it('tanpa jalur eksekusi (tanpa kunci SSH dan agen tidak boleh mengeksekusi): rencana tidak dibuat', async () => {
     const s2 = (await h.call('POST', '/api/servers', { name: 'srv-tanpa-jalur', host: '10.4.4.5', username: 'ops', generate_key: true })).json.id; await h.db.exec("UPDATE servers SET ssh_key_enc='', key_path='' WHERE id=$1", [s2]);
-    const a2 = (await h.call('POST', `/api/servers/${s2}/agent`, {})).json, ts = String(Math.floor(Date.now() / 1000)), raw = JSON.stringify(FACTS());
+    const a2 = (await h.call('POST', `/api/servers/${s2}/agent`, {})).json, ts = agentTs(), raw = JSON.stringify(FACTS());
     await h.app.inject({ method: 'POST', url: '/agent/v1/patch', headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': a2.keyId, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(a2.config.secret, ts, 'POST', '/agent/v1/patch', raw) }, payload: raw });
     expect((await h.call('POST', `/api/servers/${s2}/patch-plan`, {})).json.error).toMatch(/Tidak ada jalur eksekusi/);
   });

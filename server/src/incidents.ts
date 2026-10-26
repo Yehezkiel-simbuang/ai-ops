@@ -10,6 +10,7 @@ import { isLevel, rank, RANK, type Level } from './levels.js';
 import * as Monitor from './monitor.js';
 import * as Notify from './notify.js';
 import { classify } from './safety.js';
+import { redactOutput } from './redact.js';
 import * as Servers from './servers.js';
 import { getRole } from './store.js';
 
@@ -227,7 +228,7 @@ async function execute(recId: number): Promise<void> {
     if (classify(s.command).cls === 'blocked') { await db().exec("UPDATE rec_steps SET status='blocked' WHERE id=$1", [s.id]); failed = `Langkah ${s.n} diblokir kebijakan`; break; }
     await db().exec("UPDATE rec_steps SET status='running', started=$1, via=$2 WHERE id=$3", [Date.now(), path, s.id]);
     const r = await runOne(server, path, recId, s.n, s.command, s.class === 'read' ? 60 : rec.kind === 'patch' ? 600 : 180);   // memasang paket bisa lama; batas agen 10 menit
-    await db().exec('UPDATE rec_steps SET status=$1, exit_code=$2, stdout=$3, stderr=$4, finished=$5, via=$6 WHERE id=$7', [r.exit === 0 ? 'done' : 'failed', r.exit, r.stdout.slice(0, 20000), r.stderr.slice(0, 20000), Date.now(), r.via, s.id]);
+    await db().exec('UPDATE rec_steps SET status=$1, exit_code=$2, stdout=$3, stderr=$4, finished=$5, via=$6 WHERE id=$7', [r.exit === 0 ? 'done' : 'failed', r.exit, redactOutput(r.stdout).slice(0, 20000), redactOutput(r.stderr).slice(0, 20000), Date.now(), r.via, s.id]);
     await audit('agen', 'rekomendasi.langkah', `#${recId}.${s.n} [${s.class}] exit ${r.exit} via ${r.via}`); ran++;
     if (r.exit !== 0) {
       if (s.class === 'change') { failed = `Langkah ${s.n} (${s.title}) gagal dengan exit ${r.exit}`; break; }   // perubahan gagal: berhenti, jangan lanjut ke langkah berikutnya

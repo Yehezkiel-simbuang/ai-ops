@@ -5,6 +5,7 @@ import { audit, bad, db, log } from './context.js';
 import { forRole, type RoleChat } from './llm.js';
 import * as Notify from './notify.js';
 import { classify } from './safety.js';
+import { redactOutput } from './redact.js';
 import * as Servers from './servers.js';
 import * as Store from './store.js';
 
@@ -55,7 +56,7 @@ async function execute(cmdId: number, decidedBy: string): Promise<Record<string,
   const c = (await db().one('SELECT * FROM commands WHERE id=$1', [cmdId]))!, server = c.server_id ? await Servers.get(c.server_id) : undefined;
   await db().exec('UPDATE commands SET status=$1, started=$2, decided_by=COALESCE($3,decided_by) WHERE id=$4', ['running', Date.now(), decidedBy, cmdId]);
   const r = server ? await Servers.run(server, c.command, { timeoutMs: c.class === 'read' ? 30_000 : 120_000 }) : { exitCode: 255, stdout: '', stderr: 'Server sudah dihapus' };
-  await db().exec('UPDATE commands SET status=$1, exit_code=$2, stdout=$3, stderr=$4, finished=$5 WHERE id=$6', [r.exitCode === 0 ? 'done' : 'failed', r.exitCode, r.stdout, r.stderr, Date.now(), cmdId]);
+  await db().exec('UPDATE commands SET status=$1, exit_code=$2, stdout=$3, stderr=$4, finished=$5 WHERE id=$6', [r.exitCode === 0 ? 'done' : 'failed', r.exitCode, redactOutput(r.stdout), redactOutput(r.stderr), Date.now(), cmdId]);
   await audit(decidedBy, 'perintah.jalan', `#${cmdId} [${c.class}] ${String(c.command).slice(0, 200)} -> exit ${r.exitCode}`);
   return (await db().one('SELECT * FROM commands WHERE id=$1', [cmdId]))!;
 }

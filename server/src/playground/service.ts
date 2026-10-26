@@ -4,6 +4,7 @@ import http from 'node:http';
 import { z } from 'zod';
 import { audit, bad, db, log } from '../context.js';
 import { open, seal } from '../crypto.js';
+import { redactOutput } from '../redact.js';
 import * as Servers from '../servers.js';
 import { analyze, MAX_COMPOSE_CHARS, targetPort, type ComposeAnalysis } from './compose.js';
 
@@ -82,7 +83,7 @@ async function save(id: number, patch: { status?: Status; detail?: string; log?:
   for (const [k, v] of Object.entries(patch)) if (v !== undefined) { vals.push(v); sets.push(`${k}=$${vals.length}`); }
   await db().exec(`UPDATE playground_deploys SET ${sets.join(',')} WHERE id=$1`, vals);
 }
-const clipLog = (s: string) => (s.length > 8000 ? '...' + s.slice(-8000) : s);
+const clipLog = (raw: string) => { const s = redactOutput(raw); return s.length > 8000 ? '...' + s.slice(-8000) : s; };
 
 interface Container { Service: string; State: string; Health?: string }
 export function parsePs(out: string): Container[] {

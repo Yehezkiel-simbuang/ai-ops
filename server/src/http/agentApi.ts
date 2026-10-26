@@ -40,6 +40,12 @@ const authenticateAgent: express.RequestHandler = async (req, res, next) => {
     res.status(401).json({ error: 'tidak sah' });
     return;
   }
+  // GET (poll perintah) dikecualikan: dua poll sah dalam satu detik menghasilkan tanda tangan yang sama; perintah sendiri sudah bertanda tangan dan berkedaluwarsa.
+  if (req.method !== 'GET' && !(await Agents.claimRequest(agent.server_id, sig))) {
+    req.log.warn({ keyId: keyId.slice(0, 20), ip: req.ip }, 'permintaan agen diulang (replay) ditolak');
+    res.status(401).json({ error: 'tidak sah' });
+    return;
+  }
   req.agent = agent;
   next();
 };

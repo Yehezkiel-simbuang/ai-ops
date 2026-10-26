@@ -274,3 +274,13 @@ Konvensi: data server selalu lewat `useQuery(q.xxx())` (polling dan segar-ulang 
 - Klasifikasi perintah memakai daftar putih yang konservatif, bukan jaminan mutlak: tetap baca perintah sebelum menyetujui.
 - Kunci SSH harus tanpa passphrase. Host key server baru diterima sekali (disimpan di volume `appdata`), setelah itu harus cocok.
 - `node:sqlite` tidak lagi dipakai; PostgreSQL adalah satu-satunya basis data.
+
+## Rotasi kunci enkripsi dan pengerasan basis data
+
+- **Format tersegel v2**: `v2:<id-kunci>:<iv>:<tag>:<data>`. Format v1 lama tetap terbuka dan diperbarui oleh `rotate-key`.
+- **Ganti `MASTER_KEY`**: (1) pindahkan nilai lama ke `MASTER_KEY_PREVIOUS` (boleh beberapa, dipisah koma) dan isi `MASTER_KEY` baru; (2) jalankan `node dist/admin-cli.js rotate-key`; (3) buang `MASTER_KEY_PREVIOUS` bila laporan menyatakan semua rahasia sudah memakai kunci aktif. Nilai yang tidak bisa dibuka tidak ditimpa dan dilaporkan.
+- **Rahasia yang gagal dibuka** (kunci salah atau data rusak) kini tercatat sebagai peringatan di log, bukan diam-diam menjadi kosong.
+- **Keluaran perintah disamarkan** (`password=`, token, kunci privat PEM, kredensial di URL, dll.) sebelum disimpan di `commands`, `rec_steps`, `agent_commands`, dan log playground, serta sebelum sampai ke model.
+- **Kunci akun**: 5 kegagalan masuk berturut-turut mengunci akun 15 menit (password benar pun ditolak). `reset-password` membuka kunci.
+- **Anti-replay agen**: permintaan POST dengan tanda tangan yang sama ditolak (tabel `agent_nonces`). Poll perintah (GET) dikecualikan; perintah sudah bertanda tangan dan berkedaluwarsa.
+- **Foreign key** ditambahkan untuk `commands.server_id`, `agent_commands.rec_id`, `load_tests.playground_id` (semua `ON DELETE SET NULL`). `usage.run_id` dan `notifications.channel_id` sengaja tanpa FK karena log historis.

@@ -4,6 +4,7 @@ import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { audit, bad, db } from './context.js';
 import { open, randomToken, seal } from './crypto.js';
 import { syncAlerts } from './monitor.js';
+import { redactOutput } from './redact.js';
 
 export interface AgentRow { server_id: number; key_id: string; secret_enc: string; created: number; rotated: number | null; last_seen: number | null; version: string; hostname: string; exec_enabled: boolean; open_keys: string[]; online: boolean; last_ip: string }
 export const MAX_SKEW_MS = 5 * 60_000;
@@ -44,6 +45,12 @@ export function verifyRequest(secret: string, ts: string, method: string, path: 
   const want = Buffer.from(signRequest(secret, ts, method, path, body)), got = Buffer.from(String(sig));
   return want.length === got.length && timingSafeEqual(want, got);
 }
+/** Anti-replay: tanda tangan yang sama tidak diterima dua kali di dalam jendela waktu. Mengembalikan false bila permintaan ini sudah pernah dilihat. */
+let lastNonceSweep = 0;
+export async function claimRequest(serverId: number, sig: string, now = Date.now()): Promise<boolean> {
+  if (now - lastNonceSweep > 60_000) { lastNonceSweep = now; await db().exec('DELETE FROM agent_nonces WHERE seen<$1', [now - 2 * MAX_SKEW_MS]); }
+  return (await db().exec('INSERT INTO agent_nonces(server_id,sig,seen) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [serverId, String(sig).slice(0, 128), now])) > 0;
+}
 export const signCommand = (secret: string, id: string, expires: number, timeoutS: number, command: string): string => createHmac('sha256', secret).update(`cmd\n${id}\n${expires}\n${timeoutS}\n${command}`).digest('hex');
 
 // ---------- detak jantung
@@ -79,7 +86,7 @@ export async function takeCommands(serverId: number, secret: string, waitSec: nu
 }
 export async function recordResult(serverId: number, id: string, r: { exit?: number; stdout?: string; stderr?: string; rejected?: string }): Promise<boolean> {
   const rej = String(r.rejected ?? '').slice(0, 300);
-  const n = await db().exec("UPDATE agent_commands SET status=$1, finished=$2, exit_code=$3, stdout=$4, stderr=$5, rejected=$6 WHERE id=$7 AND server_id=$8 AND status IN ('sent','queued')", [rej ? 'rejected' : 'done', Date.now(), Number.isFinite(r.exit) ? r.exit : 1, String(r.stdout ?? '').slice(0, 20000), String(r.stderr ?? '').slice(0, 20000), rej, id, serverId]);
+  const n = await db().exec("UPDATE agent_commands SET status=$1, finished=$2, exit_code=$3, stdout=$4, stderr=$5, rejected=$6 WHERE id=$7 AND server_id=$8 AND status IN ('sent','queued')", [rej ? 'rejected' : 'done', Date.now(), Number.isFinite(r.exit) ? r.exit : 1, redactOutput(r.stdout).slice(0, 20000), redactOutput(r.stderr).slice(0, 20000), rej, id, serverId]);
   return n > 0;
 }
 export async function waitResult(id: string, timeoutMs: number): Promise<Record<string, any>> {

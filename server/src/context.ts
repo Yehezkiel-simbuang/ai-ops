@@ -1,11 +1,15 @@
 // Konteks aplikasi yang dipakai modul domain: koneksi database, konfigurasi, logger. Diisi sekali saat start (atau per uji).
 import type { Config } from './config.js';
 import type { Db } from './db.js';
+import { setOpenFailureHandler } from './crypto.js';
 import type { Logger } from './logger.js';
 
 export interface AppCtx { db: Db; cfg: Config; log: Logger }
 let current: AppCtx | null = null;
-export function setCtx(c: AppCtx): void { current = c; }
+export function setCtx(c: AppCtx): void {
+  current = c;
+  setOpenFailureHandler((why) => c.log.warn({ why }, 'rahasia tersegel tidak bisa dibuka (kunci salah atau data rusak); nilai dianggap kosong'));
+}
 export function ctx(): AppCtx { if (!current) throw new Error('konteks aplikasi belum diatur'); return current; }
 export const db = (): Db => ctx().db;
 export const log = (): Logger => ctx().log;

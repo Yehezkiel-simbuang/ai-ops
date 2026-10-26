@@ -2,13 +2,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as Agents from '../src/agents.js';
 import { eolOf } from '../src/patching.js';
-import { harness, login, type Harness } from './helpers.js';
+import { agentTs, harness, login, type Harness } from './helpers.js';
 
 let h: Harness, sid = 0, keyId = '', secret = '';
 const DAY = 864e5, NOW = Date.now();
 
 async function patch(body: unknown, o: { key?: string } = {}) {
-  const raw = JSON.stringify(body), ts = String(Math.floor(Date.now() / 1000)), path = '/agent/v1/patch';
+  const raw = JSON.stringify(body), ts = agentTs(), path = '/agent/v1/patch';
   const sig = Agents.signRequest(secret, ts, 'POST', path, raw);
   const r = await h.app.inject({ method: 'POST', url: path, headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': o.key ?? keyId, 'x-aiops-ts': ts, 'x-aiops-sig': sig }, payload: raw });
   return { status: r.statusCode, json: r.json() };
@@ -71,7 +71,7 @@ describe('laporan pembaruan dari agen', () => {
   it('daftar mengurutkan yang paling parah di atas, memberi alasan, dan menghitung server tanpa data', async () => {
     const sid2 = (await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-b', host: '10.2.2.3', username: 'ops' })).json.id;
     const a2 = (await h.call('POST', `/api/servers/${sid2}/agent`, {})).json, s2 = a2.config.secret, k2 = a2.keyId;
-    const raw = JSON.stringify(facts({ security: 40, updates: 90, os_version: '22.04', os_name: 'Ubuntu 22.04' })), ts = String(Math.floor(Date.now() / 1000));
+    const raw = JSON.stringify(facts({ security: 40, updates: 90, os_version: '22.04', os_name: 'Ubuntu 22.04' })), ts = agentTs();
     await h.app.inject({ method: 'POST', url: '/agent/v1/patch', headers: { host: 'localhost', 'content-type': 'application/json', 'x-aiops-key': k2, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(s2, ts, 'POST', '/agent/v1/patch', raw) }, payload: raw });
     await h.call('POST', '/api/servers', { key_path: '/k', name: 'srv-tanpa-agen', host: '10.2.2.4', username: 'ops' });
     const ov = (await h.call('GET', '/api/maintenance/patching')).json;
@@ -88,7 +88,7 @@ describe('laporan pembaruan dari agen', () => {
   });
 
   it('batas pembaruan tidak ikut dikirim ke agen (dinilai aplikasi)', async () => {
-    const cfg = (await h.app.inject({ method: 'GET', url: '/agent/v1/config', headers: (() => { const ts = String(Math.floor(Date.now() / 1000)); return { host: 'localhost', 'x-aiops-key': keyId, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(secret, ts, 'GET', '/agent/v1/config', '') }; })() })).json();
+    const cfg = (await h.app.inject({ method: 'GET', url: '/agent/v1/config', headers: (() => { const ts = agentTs(); return { host: 'localhost', 'x-aiops-key': keyId, 'x-aiops-ts': ts, 'x-aiops-sig': Agents.signRequest(secret, ts, 'GET', '/agent/v1/config', '') }; })() })).json();
     expect(Object.keys(cfg.limits).sort()).toEqual(['disk', 'io', 'load', 'mem', 'ssh_fail']);
   });
 });

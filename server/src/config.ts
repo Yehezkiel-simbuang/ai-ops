@@ -27,6 +27,7 @@ const schema = z.object({
   DB_SCHEMA: z.string().regex(/^[a-z_][a-z0-9_]*$/).optional(),
 
   MASTER_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, 'MASTER_KEY harus 64 karakter heksadesimal (32 byte). Buat: openssl rand -hex 32'),
+  MASTER_KEY_PREVIOUS: z.string().regex(/^[0-9a-fA-F]{64}(,[0-9a-fA-F]{64})*$/, 'MASTER_KEY_PREVIOUS berisi satu atau lebih kunci 64 heksadesimal, dipisah koma').optional(),   // kunci lama yang masih boleh membuka data sampai `rotate-key` dijalankan
   ADMIN_USERNAME: z.string().min(3).default('admin'),
   ADMIN_PASSWORD: z.string().min(12, 'ADMIN_PASSWORD minimal 12 karakter').optional(),
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(24 * 90).default(24 * 7),
@@ -47,16 +48,16 @@ SSH_KEYGEN_BIN: z.string().default('ssh-keygen'),
   PROJECTS_ROOT: z.string().optional(),   // folder proyek yang boleh dianalisis untuk rencana setup; kosong = fitur dimatikan
   RUN_SCHEDULER: bool.default(true)
 });
-export type Config = z.infer<typeof schema> & { cookieSecure: boolean; allowedHosts: string[] };
+export type Config = z.infer<typeof schema> & { cookieSecure: boolean; allowedHosts: string[]; masterKeyPrevious: string[] };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const merged: Record<string, string | undefined> = {
     ...env,
-    DATABASE_URL: secret(env, 'DATABASE_URL'), MASTER_KEY: secret(env, 'MASTER_KEY'), ADMIN_PASSWORD: secret(env, 'ADMIN_PASSWORD'), METRICS_TOKEN: secret(env, 'METRICS_TOKEN'), LOADGEN_SECRET: secret(env, 'LOADGEN_SECRET')
+    DATABASE_URL: secret(env, 'DATABASE_URL'), MASTER_KEY: secret(env, 'MASTER_KEY'), MASTER_KEY_PREVIOUS: secret(env, 'MASTER_KEY_PREVIOUS'), ADMIN_PASSWORD: secret(env, 'ADMIN_PASSWORD'), METRICS_TOKEN: secret(env, 'METRICS_TOKEN'), LOADGEN_SECRET: secret(env, 'LOADGEN_SECRET')
   };
   for (const k of Object.keys(merged)) if (merged[k] === '') delete merged[k];   // variabel kosong (mis. dari compose) dianggap tidak diisi
   const r = schema.safeParse(merged);
   if (!r.success) throw new Error('Konfigurasi tidak valid:\n' + r.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n'));
   const c = r.data;
-  return { ...c, cookieSecure: c.COOKIE_SECURE ?? c.NODE_ENV === 'production', allowedHosts: c.ALLOWED_HOSTS.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean) };
+  return { ...c, cookieSecure: c.COOKIE_SECURE ?? c.NODE_ENV === 'production', allowedHosts: c.ALLOWED_HOSTS.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean), masterKeyPrevious: (c.MASTER_KEY_PREVIOUS ?? '').split(',').filter(Boolean) };
 }

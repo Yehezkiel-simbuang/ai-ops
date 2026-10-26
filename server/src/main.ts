@@ -21,7 +21,7 @@ const MIGRATIONS = fileURLToPath(new URL('../migrations', import.meta.url));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main(): Promise<void> {
-  const cfg = loadConfig(); initCrypto(cfg.MASTER_KEY);
+  const cfg = loadConfig(); initCrypto(cfg.MASTER_KEY, cfg.masterKeyPrevious);
   const log = createLogger(cfg.LOG_LEVEL);
   const db = new Db(cfg, (e) => log.error({ err: e.message }, 'koneksi database idle error'));
   setCtx({ db, cfg, log });

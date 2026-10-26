@@ -94,7 +94,7 @@ describe('vault kredensial', () => {
     expect(JSON.stringify(r.json.credential)).not.toContain(secret); expect(r.json.credential.has_secret).toBe(true);
     const listing = JSON.stringify((await h.call('GET', `/api/servers/${a}/credentials`)).json); expect(listing).not.toContain(secret); expect(listing).not.toContain('secret_enc');
     expect(JSON.stringify((await h.call('GET', '/api/vault')).json)).not.toContain(secret);
-    const row = await h.db.one('SELECT secret_enc FROM credentials WHERE id=$1', [cid]); expect(row!.secret_enc).not.toContain(secret); expect(row!.secret_enc).toMatch(/^v1:/);
+    const row = await h.db.one('SELECT secret_enc FROM credentials WHERE id=$1', [cid]); expect(row!.secret_enc).not.toContain(secret); expect(row!.secret_enc).toMatch(/^v2:[0-9a-f]{8}:/);
     expect(JSON.stringify(await h.db.query('SELECT * FROM credential_versions'))).not.toContain(secret);
   });
   it('ungkap: password salah ditolak dan tercatat; benar mengembalikan rahasia; audit tanpa isi rahasia', async () => {

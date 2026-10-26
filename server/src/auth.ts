@@ -6,6 +6,8 @@ import type { Config } from './config.js';
 export interface SessionUser { id: number; username: string; mustChange: boolean }
 /** Password awal bila ADMIN_PASSWORD tidak disetel. Selalu disertai kewajiban ganti: tidak ada fitur lain yang bisa dipakai sebelum diganti. */
 export const DEFAULT_PASSWORD = '123456';
+/** Kunci akun: setelah MAX_FAILS gagal berturut-turut akun menolak masuk selama LOCK_MS (pembatas per IP saja tidak menahan serangan dari banyak IP). */
+export const MAX_FAILS = 5, LOCK_MS = 15 * 60_000;
 const DUMMY = hashPassword('dummy-password-for-timing').catch(() => '');   // dibandingkan saat pengguna tidak ada: cegah enumerasi lewat waktu respons
 
 export async function ensureAdmin(cfg: Config): Promise<void> {
@@ -19,11 +21,19 @@ export async function ensureAdmin(cfg: Config): Promise<void> {
 
 export async function login(cfg: Config, username: string, password: string, ip: string, ua: string): Promise<{ token: string; user: SessionUser } | null> {
   const u = await db().one('SELECT * FROM users WHERE username=$1', [String(username).slice(0, 100)]);
-  const ok = u ? await verifyPassword(String(password), u.password_hash) : (await verifyPassword(String(password), (await DUMMY) || 'x'), false);
-  if (!u || !ok) { await audit('sistem', 'login.gagal', `${String(username).slice(0, 50)} dari ${ip}`); return null; }
-  const token = randomToken(32), now = Date.now();
+  const now = Date.now(), locked = !!u && Number(u.locked_until ?? 0) > now;
+  // akun terkunci tetap menjalani hash palsu: waktu respons sama dan password benar pun tidak membuka kunci
+  const ok = u && !locked ? await verifyPassword(String(password), u.password_hash) : (await verifyPassword(String(password), (await DUMMY) || 'x'), false);
+  if (!u || !ok) {
+    if (u && !locked) {
+      const r = await db().one('UPDATE users SET locked_until=CASE WHEN failed_logins+1>=$2 THEN $3::bigint ELSE locked_until END, failed_logins=CASE WHEN failed_logins+1>=$2 THEN 0 ELSE failed_logins+1 END WHERE id=$1 RETURNING locked_until', [u.id, MAX_FAILS, now + LOCK_MS]);
+      if (r && Number(r.locked_until ?? 0) > now) await audit('sistem', 'akun.terkunci', `${u.username} selama ${LOCK_MS / 60_000} menit setelah ${MAX_FAILS} kegagalan, dari ${ip}`);
+    }
+    await audit('sistem', locked ? 'login.ditolak-terkunci' : 'login.gagal', `${String(username).slice(0, 50)} dari ${ip}`); return null;
+  }
+  const token = randomToken(32);
   await db().exec('INSERT INTO sessions(id,user_id,created_at,expires_at,last_seen,ip,ua) VALUES($1,$2,$3,$4,$5,$6,$7)', [sha256(token), u.id, now, now + cfg.SESSION_TTL_HOURS * 3600e3, now, ip.slice(0, 64), ua.slice(0, 200)]);
-  await db().exec('UPDATE users SET last_login=$1 WHERE id=$2', [now, u.id]); await audit(u.username, 'login', ip);
+  await db().exec('UPDATE users SET last_login=$1, failed_logins=0, locked_until=NULL WHERE id=$2', [now, u.id]); await audit(u.username, 'login', ip);
   return { token, user: { id: u.id, username: u.username, mustChange: !!u.must_change } };
 }
 
@@ -37,7 +47,7 @@ export async function authenticate(cfg: Config, token: string | undefined): Prom
 /** Pemulihan (dari CLI di server): kembalikan ke password bawaan dan wajibkan ganti. Semua sesi dicabut. */
 export async function resetPassword(username: string): Promise<boolean> {
   const u = await db().one('SELECT id FROM users WHERE username=$1', [username]); if (!u) return false;
-  await db().exec('UPDATE users SET password_hash=$1, must_change=true WHERE id=$2', [await hashPassword(DEFAULT_PASSWORD), u.id]);
+  await db().exec('UPDATE users SET password_hash=$1, must_change=true, failed_logins=0, locked_until=NULL WHERE id=$2', [await hashPassword(DEFAULT_PASSWORD), u.id]);
   await db().exec('DELETE FROM sessions WHERE user_id=$1', [u.id]); await audit('sistem', 'password.dipulihkan', username);
   return true;
 }
@@ -48,7 +58,7 @@ export async function changePassword(userId: number, current: string, next: stri
   if (next === DEFAULT_PASSWORD) throw bad('Password baru tidak boleh sama dengan password bawaan');
   const u = await db().one('SELECT * FROM users WHERE id=$1', [userId]); if (!u || !(await verifyPassword(current, u.password_hash))) throw bad('Password saat ini salah');
   if (next.toLowerCase() === String(u.username).toLowerCase()) throw bad('Password tidak boleh sama dengan nama pengguna');
-  await db().exec('UPDATE users SET password_hash=$1, must_change=false WHERE id=$2', [await hashPassword(next), userId]);
+  await db().exec('UPDATE users SET password_hash=$1, must_change=false, failed_logins=0, locked_until=NULL WHERE id=$2', [await hashPassword(next), userId]);
   await db().exec('DELETE FROM sessions WHERE user_id=$1', [userId]);   // semua sesi lama dicabut
   await audit(u.username, 'password.ganti', '');
 }
