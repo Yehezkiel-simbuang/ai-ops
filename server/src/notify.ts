@@ -152,6 +152,9 @@ export async function reminders(): Promise<void> {
 export function approvalPending(cmd: { command: string }, runName: string, serverName: string): void {
   fire(dispatch({ kind: 'approval', level: 'info', importance: 4, title: `[PERSETUJUAN] ${runName || 'Setup'} di ${serverName || 'server'}`, text: `Agen meminta izin menjalankan:\n${String(cmd.command).slice(0, 400)}\nBuka AI Ops > Ringkasan untuk menyetujui atau menolak.` }));
 }
+export function stepFailed(runName: string, detail: string): void {
+  fire(dispatch({ kind: 'run', level: 'major', importance: 4, title: `[PERLU DICEK] ${runName}`, text: `${detail.slice(0, 500)}\nBuka AI Ops > Setup untuk memeriksa.` }));
+}
 export async function runFinished(run: { name: string; status: string; summary?: string }): Promise<void> {
   if ((await metaGet('notify_runs')) === '0') return;
   const badRun = run.status === 'failed'; fire(dispatch({ kind: 'run', level: badRun ? 'major' : 'info', importance: badRun ? 4 : 3, title: `${badRun ? '[GAGAL]' : '[SELESAI]'} ${run.name}`, text: String(run.summary ?? '').slice(0, 600) }));

@@ -81,7 +81,7 @@ export interface PatchPlanItem { id: number; server_id: number; server_name: str
 export interface IncidentDetail { incident: Incident & { server_name: string }; recommendations: Recommendation[]; path: ExecPath }
 
 // ---------- setup oleh agen
-export type RunStatus = 'draft' | 'running' | 'waiting_approval' | 'done' | 'failed' | 'stopped' | 'interrupted';
+export type RunStatus = 'draft' | 'running' | 'waiting_approval' | 'needs_attention' | 'done' | 'failed' | 'stopped' | 'interrupted';
 export type PlanStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped';
 export interface PlanStep { id: number; title: string; detail?: string; note?: string; status: PlanStepStatus }
 export interface Run {

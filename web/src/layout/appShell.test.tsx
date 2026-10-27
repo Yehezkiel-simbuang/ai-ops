@@ -38,6 +38,19 @@ describe('AppShell', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Buka menu' })); expect(nav).toHaveClass('open'); await userEvent.keyboard('{Escape}'); expect(nav).not.toHaveClass('open');
   });
 
+  it('persetujuan menunggu dan proses yang gagal menambah angka di menu Setup dan di judul tab', async () => {
+    const pend = { id: 1, run_id: 'r1', run_name: 'x', command: 'ufw enable', purpose: '', reason: '' };
+    render(overview({ pending: [pend], runs: [{ id: 'r2', status: 'needs_attention' } as never] }));
+    const nav = screen.getByRole('navigation', { name: 'Navigasi utama' });
+    expect(await within(nav).findByRole('link', { name: /Setup\s*2/ })).toBeInTheDocument();
+    expect(document.title).toMatch(/^\(2\) Perlu tindakan/);
+  });
+
+  it('tanpa yang menunggu, tidak ada angka di Setup dan judul tab biasa', async () => {
+    render(); await screen.findByText('halaman monitor');
+    expect(within(screen.getByRole('navigation', { name: 'Navigasi utama' })).getByRole('link', { name: 'Setup' })).toBeInTheDocument(); expect(document.title).not.toMatch(/Perlu tindakan/);
+  });
+
   it('menyentuh latar di belakang menu menutupnya', async () => {
     const { container } = (render(), { container: document.body });
     await userEvent.click(screen.getByRole('button', { name: 'Buka menu' }));

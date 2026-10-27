@@ -13,7 +13,7 @@ export function ServerStatusBadge({ status }: { status: ServerStatus }) {
 }
 
 const RUN: Record<RunStatus, [Tone, string]> = {
-  draft: ['mute', 'Draf'], running: ['acc', 'Berjalan'], waiting_approval: ['warn', 'Menunggu persetujuan'], done: ['ok', 'Selesai'], failed: ['bad', 'Gagal'], stopped: ['mute', 'Dihentikan'], interrupted: ['warn', 'Terputus']
+  draft: ['mute', 'Draf'], running: ['acc', 'Berjalan'], waiting_approval: ['warn', 'Menunggu persetujuan'], needs_attention: ['bad', 'Perlu dicek'], done: ['ok', 'Selesai'], failed: ['bad', 'Gagal'], stopped: ['mute', 'Dihentikan'], interrupted: ['warn', 'Terputus']
 };
 export function RunStatusBadge({ status }: { status: RunStatus }) {
   const [tone, label] = RUN[status] ?? RUN.draft;

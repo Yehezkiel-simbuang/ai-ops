@@ -120,6 +120,29 @@ describe('agen setup', () => {
     expect(rs.filter((r) => r.status === 200)).toHaveLength(1); expect(sshLog.filter((c) => c === 'systemctl reload nginx')).toHaveLength(1);
   });
 
+  it('perubahan yang gagal menghentikan agen (Perlu dicek) sampai pengguna melanjutkan; agen lalu melihat kegagalannya', async () => {
+    const replies = [{ thought: 'x', command: 'systemctl reload nginx', purpose: 'reload' }, { thought: 'diperbaiki', command: '', done: true, summary: 'selesai setelah diperbaiki' }];
+    Agent.configure({ llm: fakeLLM(replies) as never });
+    sshLog.length = 0; Servers.setExec(exec(() => ({ exitCode: 1, stderr: 'nginx: konfigurasi salah di baris 7' })) as never);
+    const run = (await h.call('POST', '/api/runs', { serverId: sid, goal: 'uji gagal' })).json; await h.call('POST', `/api/runs/${run.id}/start`);
+    await until(async () => (await Store.getRun(run.id))!.status === 'waiting_approval');
+    const cmd = (await h.db.one("SELECT id FROM commands WHERE run_id=$1 AND status='pending_approval'", [run.id]))!;
+    expect((await h.call('POST', `/api/commands/${cmd.id}/approve`)).status).toBe(200);
+    const stopped = (await Store.getRun(run.id))!;
+    expect(stopped.status).toBe('needs_attention'); expect(stopped.summary).toMatch(/gagal \(exit 1\).*baris 7/); expect(stopped.turns).toBe(1);   // tidak ada panggilan model baru
+    await new Promise((r) => setTimeout(r, 150)); expect((await Store.getRun(run.id))!.turns).toBe(1);
+    expect((await h.call('POST', `/api/runs/${run.id}/start`)).status).toBe(200);   // Lanjutkan
+    expect(await until(async () => (await Store.getRun(run.id))!.status === 'done')).toBeTruthy();
+    const seen = await h.db.query("SELECT content FROM messages WHERE run_id=$1 AND role='user'", [run.id]); expect(seen.some((m: any) => /exit 1/.test(m.content) && /baris 7/.test(m.content))).toBe(true);
+  });
+
+  it('perintah baca yang keluar bukan nol tidak menghentikan agen', async () => {
+    Agent.configure({ llm: fakeLLM([{ thought: 'cek', command: 'uptime', purpose: 'cek' }, { thought: 'ok', command: '', done: true, summary: 'beres' }]) as never });
+    sshLog.length = 0; Servers.setExec(exec(() => ({ exitCode: 1, stderr: 'tidak ada' })) as never);
+    const run = (await h.call('POST', '/api/runs', { serverId: sid, goal: 'uji baca gagal' })).json; await h.call('POST', `/api/runs/${run.id}/start`);
+    expect(await until(async () => (await Store.getRun(run.id))!.status === 'done')).toBeTruthy();
+  });
+
   it('penolakan diteruskan ke agen dan perintah tidak dijalankan', async () => {
     Agent.configure({ llm: fakeLLM([{ thought: 'x', command: 'systemctl restart mysql', purpose: 'restart' }, { thought: 'tanpa restart', command: '', done: true, summary: 'tidak ada perubahan' }]) as never });
     sshLog.length = 0;

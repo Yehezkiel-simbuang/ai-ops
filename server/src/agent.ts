@@ -1,4 +1,4 @@
-// Agen setup server. Satu perintah per giliran: model mengusulkan, kebijakan (safety.ts) mengklasifikasi,
+// Agen setup server. Satu langkah rencana (satu skrip) per giliran: model mengusulkan, kebijakan (safety.ts) mengklasifikasi,
 // perintah baca dijalankan otomatis, perintah yang mengubah sesuatu MENUNGGU persetujuan di UI, perintah merusak diblokir.
 // Semua perintah, keluaran, keputusan, dan token tercatat di database. Persetujuan diklaim atomik (tidak bisa dijalankan dua kali).
 import { audit, bad, db, log } from './context.js';
@@ -29,9 +29,9 @@ export function systemPrompt(run: Record<string, any>, server: Servers.ServerRow
     `Rencana langkah:\n${steps}`,
     '',
     'ATURAN KERJA',
-    '1. Satu perintah shell per giliran. Perintah non-interaktif saja (tanpa editor, tanpa prompt, tanpa top tanpa -b).',
-    '2. Kumpulkan bukti dulu dengan perintah baca; jangan menebak. Jelaskan alasan setiap perintah di "purpose".',
-    '3. Perintah baca dijalankan otomatis. Perintah yang mengubah sesuatu diteruskan ke pengguna untuk disetujui; usulkan perubahan sekecil dan semudah dibalik mungkin: cadangkan berkas sebelum diedit (cp -a), validasi konfigurasi sebelum reload (nginx -t, php-fpm -tt), ubah satu hal per giliran, lalu verifikasi hasilnya.',
+    '1. Satu LANGKAH rencana per giliran, dalam satu skrip shell (beberapa baris atau dipisah &&) supaya pengguna cukup menyetujui sekali per langkah. Awali skrip perubahan dengan "set -e" agar berhenti di perintah pertama yang gagal, dan akhiri dengan perintah baca yang menampilkan bukti hasilnya. Non-interaktif saja (tanpa editor, tanpa prompt, tanpa top tanpa -b).',
+    '2. Kumpulkan bukti dulu dengan perintah baca; jangan menebak. Jelaskan alasan setiap skrip di "purpose".',
+    '3. Perintah baca dijalankan otomatis. Skrip yang mengubah sesuatu diteruskan ke pengguna untuk disetujui; usulkan perubahan sekecil dan semudah dibalik mungkin: cadangkan berkas sebelum diedit (cp -a), validasi konfigurasi sebelum reload (nginx -t, php-fpm -tt), lalu verifikasi hasilnya. Jangan gabungkan dalam satu skrip hal yang bisa mengunci akses ke server (aktifkan firewall, ubah sshd) dengan langkah lain: pecah per giliran. Bila skrip gagal, kamu akan menunggu pengguna memeriksanya sebelum melanjutkan.',
     '4. Perintah merusak (hapus rekursif, format, reboot, DROP DATABASE, dsb.) diblokir. Jangan mengusulkannya; minta pengguna melakukannya manual bila memang perlu.',
     '5. Jangan menampilkan rahasia (password, token, kunci). Keluaran yang panjang dipotong; persempit dengan grep/head/tail.',
     '6. Bila hasil perintah menunjukkan asumsimu salah, katakan dan ubah rencana.',
@@ -55,7 +55,7 @@ const outputMsg = (c: Record<string, any>): string => `HASIL perintah #${c.id} (
 async function execute(cmdId: number, decidedBy: string): Promise<Record<string, any>> {
   const c = (await db().one('SELECT * FROM commands WHERE id=$1', [cmdId]))!, server = c.server_id ? await Servers.get(c.server_id) : undefined;
   await db().exec('UPDATE commands SET status=$1, started=$2, decided_by=COALESCE($3,decided_by) WHERE id=$4', ['running', Date.now(), decidedBy, cmdId]);
-  const r = server ? await Servers.run(server, c.command, { timeoutMs: c.class === 'read' ? 30_000 : 120_000 }) : { exitCode: 255, stdout: '', stderr: 'Server sudah dihapus' };
+  const r = server ? await Servers.run(server, c.command, { timeoutMs: c.class === 'read' ? 30_000 : 300_000 }) : { exitCode: 255, stdout: '', stderr: 'Server sudah dihapus' };
   await db().exec('UPDATE commands SET status=$1, exit_code=$2, stdout=$3, stderr=$4, finished=$5 WHERE id=$6', [r.exitCode === 0 ? 'done' : 'failed', r.exitCode, redactOutput(r.stdout), redactOutput(r.stderr), Date.now(), cmdId]);
   await audit(decidedBy, 'perintah.jalan', `#${cmdId} [${c.class}] ${String(c.command).slice(0, 200)} -> exit ${r.exitCode}`);
   return (await db().one('SELECT * FROM commands WHERE id=$1', [cmdId]))!;
@@ -78,7 +78,7 @@ async function loop(runId: string): Promise<void> {
       let msgs = await history(runId);
       if (!msgs.length) { await addMsg(runId, 'user', `Mulai. Tujuan: ${run.goal || 'ikuti rencana langkah'}. Usulkan perintah pertama (baca dulu).`); msgs = await history(runId); }
       let reply;
-      try { reply = await dep.llm('setup', { system: systemPrompt(run, server), messages: msgs, maxTokens: 1500, run: runId }); }
+      try { reply = await dep.llm('setup', { system: systemPrompt(run, server), messages: msgs, maxTokens: 2500, run: runId }); }
       catch (e) { await setStatus(runId, 'failed', `Panggilan model gagal: ${(e as Error).message}`); return; }
       if (ctl.stop) { await setStatus(runId, 'stopped', 'Dihentikan pengguna'); return; }
       await addMsg(runId, 'assistant', reply.text || '(kosong)');
@@ -120,6 +120,15 @@ export async function stop(runId: string): Promise<void> {
   await db().exec("UPDATE commands SET status='rejected', reason='run dihentikan' WHERE run_id=$1 AND status='pending_approval'", [runId]); await audit('pengguna', 'run.henti', runId);
 }
 
+/** Perubahan yang gagal menghentikan agen supaya pengguna memeriksa dulu; tanpa ini agen mencoba lagi sendiri dan kegagalan terlewat. */
+async function pauseOnFailure(runId: string, c: Record<string, any>): Promise<void> {
+  const why = String(c.stderr || c.stdout || '').trim().split('\n').filter(Boolean).pop() ?? 'tanpa keluaran';
+  active.delete(runId);
+  const summary = `Perintah #${c.id} gagal (exit ${c.exit_code}): ${clip(why, 200)}. Agen berhenti supaya Anda bisa memeriksa. Lanjutkan agar agen memperbaikinya, atau Hentikan.`;
+  await setStatus(runId, 'needs_attention', summary);
+  const run = await Store.getRun(runId); if (run) Notify.stepFailed(run.name, summary);
+}
+
 export async function decide(cmdId: number | string, approve: boolean, reason?: string): Promise<Record<string, any>> {
   // klaim atomik: hanya satu pemanggil yang berhasil mengubah pending_approval, jadi perintah tidak mungkin berjalan dua kali
   const claimed = await db().one("UPDATE commands SET status=$1, decided_by='pengguna', reason=CASE WHEN $2 THEN reason ELSE $3 END WHERE id=$4 AND status='pending_approval' RETURNING *", [approve ? 'approved' : 'rejected', approve, String(reason || 'ditolak').slice(0, 300), Number(cmdId)]);
@@ -129,7 +138,9 @@ export async function decide(cmdId: number | string, approve: boolean, reason?: 
     await addMsg(claimed.run_id, 'user', `PERINTAH #${claimed.id} DITOLAK pengguna${reason ? ': ' + reason : ''}. Jangan jalankan itu; usulkan alternatif atau jelaskan mengapa perlu.`);
   } else {
     await audit('pengguna', 'perintah.setuju', `#${claimed.id} ${String(claimed.command).slice(0, 200)}`);
-    await addMsg(claimed.run_id, 'user', outputMsg(await execute(claimed.id, 'pengguna')));
+    const done = await execute(claimed.id, 'pengguna');
+    await addMsg(claimed.run_id, 'user', outputMsg(done));
+    if (done.exit_code !== 0) { await pauseOnFailure(claimed.run_id, done); return done; }
   }
   if (!(await db().one("SELECT 1 AS x FROM commands WHERE run_id=$1 AND status='pending_approval'", [claimed.run_id]))) await resume(claimed.run_id);
   return (await db().one('SELECT * FROM commands WHERE id=$1', [claimed.id]))!;

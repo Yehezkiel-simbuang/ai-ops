@@ -12,6 +12,7 @@ import { Empty, Hint, PageHead } from '@/components/ui/Layout';
 import { IconBad, IconBan, IconClose, IconEye, IconGauge, IconList, IconOk, IconPlay, IconRefresh, IconStop, IconTerminal, IconTimer, IconTrash, IconWrench, type IconType } from '@/components/icons';
 import { del, post } from '@/lib/api';
 import { fmt } from '@/lib/format';
+import { NotifyOptIn } from '@/layout/useApprovalAlert';
 import { ApprovalCard } from './ApprovalCard';
 
 const STEP_ICON: Record<PlanStepStatus, [IconType, string]> = { pending: [IconTimer, 'pending'], running: [IconRefresh, 'running'], done: [IconOk, 'done'], failed: [IconBad, 'failed'], skipped: [IconClose, 'skipped'] };
@@ -121,11 +122,12 @@ function Body({ id, d }: { id: string; d: RunDetail }) {
         <RunStatusBadge status={run.status} />
         {active ? <Button icon={IconStop} onClick={() => stop.mutateAsync()}>Hentikan</Button>
           : spent ? <Button primary icon={IconPlay} onClick={() => resume.mutateAsync()}>Lanjutkan (+{extra})</Button>
-          : <Button primary icon={IconPlay} onClick={() => start.mutateAsync()}>{run.status === 'draft' ? 'Mulai' : 'Jalankan lagi'}</Button>}
+          : <Button primary icon={IconPlay} onClick={() => start.mutateAsync()}>{run.status === 'draft' ? 'Mulai' : run.status === 'needs_attention' ? 'Lanjutkan, agen memperbaiki' : 'Jalankan lagi'}</Button>}
         <Button icon={IconTrash} aria-label="Hapus proses" onClick={confirmDelete} />
       </PageHead>
       <div className="lbl" style={{ margin: '-8px 0 16px' }}>{run.server_name ?? 'tanpa server'} | tujuan: {run.goal}</div>
-      {run.summary && <Hint><span>{run.summary}</span></Hint>}
+      {run.summary && <Hint icon={run.status === 'needs_attention' ? IconBad : undefined}><span>{run.summary}</span></Hint>}
+      {(active || run.status === 'needs_attention') && <div style={{ margin: '0 0 12px' }}><NotifyOptIn /></div>}
       {spent && <Hint><span>Agen berhenti karena anggaran habis, bukan karena gagal. Langkah yang sudah selesai dan riwayat percakapan tetap tersimpan; Lanjutkan menambah {extra} dan agen meneruskan dari titik berhenti. Periksa dulu daftar langkah di kanan agar tahu apa yang sudah terpasang.</span></Hint>}
       {warn && <Hint><span>Anggaran hampir habis (giliran {run.turns} dari {run.max_turns}, token {fmt(run.tokens)} dari {fmt(run.token_budget)}). Bila habis di tengah langkah, server bisa setengah terpasang. <Button icon={IconGauge} onClick={() => topUp.mutateAsync()}>Tambah {extra}</Button></span></Hint>}
       <div className="cols wide-left">

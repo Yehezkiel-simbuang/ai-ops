@@ -57,6 +57,17 @@ describe('anggaran run', () => {
   });
 });
 
+describe('perintah gagal', () => {
+  it('berhenti dengan sebab yang jelas; tombolnya Lanjutkan agen memperbaiki dan memulai ulang tanpa menambah anggaran', async () => {
+    const d = detail([], [], 'needs_attention'); d.run.summary = 'Perintah #7 gagal (exit 1): nginx: konfigurasi salah di baris 7. Agen berhenti.';
+    const calls = mockApi({ 'GET /api/runs/r1': { body: d }, 'POST /api/runs/r1/start': { body: d.run } });
+    renderWithProviders(<Routes><Route path="/setup/:id" element={<RunPage />} /></Routes>, { route: '/setup/r1' });
+    expect(await screen.findByText('Perlu dicek')).toBeInTheDocument(); expect(screen.getByText(/gagal \(exit 1\).*baris 7/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Lanjutkan, agen memperbaiki' }));
+    await waitFor(() => expect(calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual(['/api/runs/r1/start']));
+  });
+});
+
 describe('RunPage', () => {
   it('perintah yang menunggu persetujuan (paling baru) muncul paling atas, di atas riwayat yang sudah selesai', async () => {
     mockApi({ 'GET /api/runs/r1': { body: detail([cmd(1, 20), cmd(2, 40, { status: 'pending_approval', class: 'change', exit_code: null, decided_by: null })], [thought(10, 'catatan-1'), thought(30, 'catatan-2')]) } });

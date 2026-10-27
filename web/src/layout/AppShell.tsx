@@ -4,11 +4,12 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
 import { q } from '@/api/queries';
 import { post } from '@/lib/api';
+import { useApprovalAlert } from './useApprovalAlert';
 import {
   IconChart, IconFlame, IconFlask, IconBook, IconCloud, IconScale, IconGauge, IconGlobe, IconHome, IconLayers, IconLock, IconMenu, IconPulse, IconServer, IconSliders, IconWrench, IconClose, type IconType
 } from '@/components/icons';
 
-interface NavItem { to: string; label: string; icon: IconType; badge?: 'pending' | 'incidents' | 'alerts' }
+interface NavItem { to: string; label: string; icon: IconType; badge?: 'pending' | 'incidents' | 'alerts' | 'setup' }
 interface NavGroup { title: string; items: NavItem[] }
 
 /** Menu dikelompokkan menurut tujuan: yang dilihat tiap hari di atas, yang jarang dipakai di bawah. */
@@ -22,7 +23,7 @@ const GROUPS: NavGroup[] = [
   ] },
   { title: 'Kelola', items: [
     { to: '/inventaris', label: 'Inventaris', icon: IconLayers },
-    { to: '/setup', label: 'Setup', icon: IconWrench },
+    { to: '/setup', label: 'Setup', icon: IconWrench, badge: 'setup' },
     { to: '/standar', label: 'Standar', icon: IconScale }
   ] },
   { title: 'Uji', items: [
@@ -48,8 +49,10 @@ export const pageTitle = (path: string): string => ALL.find((i) => path === i.to
 export function AppShell() {
   const overview = useQuery(q.overview()).data, client = useQueryClient(), navigate = useNavigate(), { pathname } = useLocation();
   const [open, setOpen] = useState(false);
-  const counts = { pending: overview?.pending.length ?? 0, incidents: overview?.incidents.length ?? 0, alerts: overview?.alerts.length ?? 0 };
-  const attention = counts.pending + counts.incidents + counts.alerts;
+  const stuck = overview?.runs.filter((r) => r.status === 'needs_attention').length ?? 0;   // proses Setup yang berhenti karena perintah gagal
+  const counts = { pending: overview?.pending.length ?? 0, incidents: overview?.incidents.length ?? 0, alerts: overview?.alerts.length ?? 0, setup: (overview?.pending.length ?? 0) + stuck };
+  const attention = counts.pending + counts.incidents + counts.alerts + stuck;
+  useApprovalAlert(counts.setup);
 
   useEffect(() => { setOpen(false); }, [pathname]);   // pindah halaman menutup menu
   useEffect(() => {
