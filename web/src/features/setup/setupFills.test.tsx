@@ -8,7 +8,7 @@ import { SetupPage } from './SetupPage';
 afterEach(() => vi.unstubAllGlobals());
 
 const server = { id: 1, name: 'srv-uji', host: '10.0.0.1', port: 22, username: 'ops', key_path: '', has_ssh_key: true, ssh_pub: '', playground: false, use_sudo: true, services: '', notes: '', exec_via: 'auto', os_info: '', last_seen: Date.now(), last_status: 'ok', open_alerts: 0 };
-const GOAL = 'Port yang terbuka: [ISI: port, mis. 80 dan 443, atau tulis "tidak ada"]. Domain: [ISI: domain]. Ulangi domain: [ISI: domain].\n\nAturan wajib: contoh panjang yang membuat bagian isian tidak terlihat di kotak tujuan.';
+const GOAL = 'Port yang terbuka: [ISI: port, pisahkan dengan koma, mis. 80, 443, atau tulis "tidak ada"]. Domain: [ISI: domain]. Ulangi domain: [ISI: domain].\n\nAturan wajib: contoh panjang yang membuat bagian isian tidak terlihat di kotak tujuan.';
 const templates: RunTemplate[] = [
   { id: 'baseline', name: 'Pengamanan dasar server baru', category: 'Fondasi server', goal: GOAL, steps: ['Baca OS', 'Pasang ufw'], ask: ['Port', 'Domain'], maxTurns: 40, tokenBudget: 300000 },
   { id: 'diagnosis', name: 'Diagnosis awal (baca saja)', category: 'Diagnosis dan tuning', goal: 'Kumpulkan gambaran kondisi server.', steps: ['Baca OS'] }
@@ -22,8 +22,8 @@ const open = async () => {
 
 describe('isian templat', () => {
   it('bagian [ISI: ...] diambil sekali per teks yang sama dan diganti hanya bila sudah diisi', () => {
-    expect(holesOf(GOAL).map((h) => h.label)).toEqual(['port, mis. 80 dan 443, atau tulis "tidak ada"', 'domain']);
-    const g = applyFills(GOAL, { '[ISI: domain]': ' contoh.com ', '[ISI: port, mis. 80 dan 443, atau tulis "tidak ada"]': '  ' });
+    expect(holesOf(GOAL).map((h) => h.label)).toEqual(['port, pisahkan dengan koma, mis. 80, 443, atau tulis "tidak ada"', 'domain']);
+    const g = applyFills(GOAL, { '[ISI: domain]': ' contoh.com ', '[ISI: port, pisahkan dengan koma, mis. 80, 443, atau tulis "tidak ada"]': '  ' });
     expect(g).toContain('Domain: contoh.com. Ulangi domain: contoh.com.'); expect(g).toContain('[ISI: port'); expect(g).not.toContain('[ISI: domain]');   // port masih kosong: tetap terdeteksi belum selesai
     expect(holesOf('tanpa isian')).toEqual([]);
   });
@@ -33,7 +33,7 @@ describe('isian templat', () => {
     await userEvent.click(within(dlg).getByRole('button', { name: 'Pengamanan dasar server baru' }));
     const box = within(dlg).getByRole('group', { name: 'Isian yang dibutuhkan' });
     expect(within(box).getByText('Isi dulu (2 dari 2 belum diisi)')).toBeInTheDocument(); expect(create).toBeDisabled();
-    await userEvent.type(within(box).getByLabelText('port, mis. 80 dan 443, atau tulis "tidak ada"'), '80 dan 443');
+    await userEvent.type(within(box).getByLabelText('port, pisahkan dengan koma, mis. 80, 443, atau tulis "tidak ada"'), '80 dan 443');
     expect(within(box).getByText('Isi dulu (1 dari 2 belum diisi)')).toBeInTheDocument(); expect(create).toBeDisabled(); expect(within(dlg).getByRole('alert')).toHaveTextContent('Lengkapi kolom "Isi dulu" di atas');
     await userEvent.type(within(box).getByLabelText('domain'), 'contoh.com');
     expect(within(box).getByText('Isi dulu (semua terisi)')).toBeInTheDocument(); await waitFor(() => expect(create).toBeEnabled()); expect(within(dlg).queryByRole('alert')).not.toBeInTheDocument();

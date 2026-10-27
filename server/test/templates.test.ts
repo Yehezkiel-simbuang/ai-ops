@@ -50,7 +50,7 @@ describe('katalog templat', () => {
 describe('membuat proses dari templat pemasangan', () => {
   it('tujuan yang masih berisi [ISI: ...] ditolak dan menyebut bagian yang belum diisi; yang sudah diganti diterima', async () => {
     const t = TEMPLATES.find((x) => x.id === 'postgres-install')!, body = { serverId: sid, template: t.id, goal: t.goal };
-    const bad = await h.call('POST', '/api/runs', body); expect(bad.status).toBe(400); expect(bad.json.error).toMatch(/masih berisi bagian yang harus Anda isi: \[ISI: nama\]/);
+    const bad = await h.call('POST', '/api/runs', body); expect(bad.status).toBe(400); expect(bad.json.error).toMatch(/masih berisi bagian yang harus Anda isi: \[ISI: nama database\]/);
     const filled = t.goal.split(PLACEHOLDER.source).length && t.goal.replace(new RegExp(PLACEHOLDER.source, 'g'), 'appdb');
     const ok = await h.call('POST', '/api/runs', { ...body, goal: filled }); expect(ok.status).toBe(200);
     const run = (await h.call('GET', `/api/runs/${ok.json.id}`)).json.run; expect(run.steps).toHaveLength(t.steps.length); expect(run.goal).toContain('appdb'); expect(run.goal).toContain(RULES.slice(0, 40));

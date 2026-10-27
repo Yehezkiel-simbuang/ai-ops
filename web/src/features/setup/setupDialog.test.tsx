@@ -9,7 +9,7 @@ afterEach(() => vi.unstubAllGlobals());
 const server = { id: 1, name: 'srv-uji', host: '10.0.0.1', port: 22, username: 'ops', key_path: '', has_ssh_key: true, ssh_pub: '', playground: false, use_sudo: true, services: '', notes: '', exec_via: 'auto', os_info: '', last_seen: Date.now(), last_status: 'ok', open_alerts: 0 };
 const templates: RunTemplate[] = [
   { id: 'diagnosis', name: 'Diagnosis awal (baca saja)', category: 'Diagnosis dan tuning', goal: 'Kumpulkan gambaran kondisi server.', steps: ['Baca OS', 'Baca layanan'] },
-  { id: 'postgres-install', name: 'Pasang PostgreSQL, database, dan backup', category: 'Data dan antrean', goal: 'Nama database: [ISI: nama].', steps: ['Baca OS', 'Pasang PostgreSQL', 'Buat database'], ask: ['Nama database'], maxTurns: 40, tokenBudget: 300000 },
+  { id: 'postgres-install', name: 'Pasang PostgreSQL, database, dan backup', category: 'Data dan antrean', goal: 'Nama database: [ISI: nama database].', steps: ['Baca OS', 'Pasang PostgreSQL', 'Buat database'], ask: ['Nama database'], maxTurns: 40, tokenBudget: 300000 },
   { id: 'redis-install', name: 'Pasang Redis (aman, bersandi, dengan batas memori)', category: 'Data dan antrean', goal: 'Batas memori: [ISI: mis. 512mb].', steps: ['Baca OS', 'Pasang Redis'], ask: ['Batas memori'], maxTurns: 40, tokenBudget: 300000 },
   { id: 'lb-nginx', name: 'Load balancer Nginx', category: 'Jaringan dan TLS', goal: 'Atur Nginx sebagai load balancer.', steps: ['Baca OS'] }
 ];
@@ -43,7 +43,7 @@ describe('Proses baru: dua blok', () => {
     const dlg = await open();
     await userEvent.click(within(dlg).getByRole('button', { name: 'Pasang PostgreSQL, database, dan backup' }));
     const chosen = within(dlg).getByRole('region', { name: 'Atur proses' });
-    expect(within(chosen).getByRole('group', { name: 'Isian yang dibutuhkan' })).toBeInTheDocument(); expect(within(chosen).getByLabelText('nama')).toBeInTheDocument(); expect(within(chosen).getByText('Rencana langkah')).toBeInTheDocument(); expect(within(chosen).getByText('Pasang PostgreSQL')).toBeInTheDocument();
+    expect(within(chosen).getByRole('group', { name: 'Isian yang dibutuhkan' })).toBeInTheDocument(); expect(within(chosen).getByLabelText('nama database')).toBeInTheDocument(); expect(within(chosen).getByText('Rencana langkah')).toBeInTheDocument(); expect(within(chosen).getByText('Pasang PostgreSQL')).toBeInTheDocument();
     expect(within(dlg).getByRole('button', { name: 'Pasang PostgreSQL, database, dan backup' })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(within(dlg).getByRole('button', { name: 'Pasang PostgreSQL, database, dan backup' }));
     expect(within(dlg).getByText(/Pilih templat di blok kiri/)).toBeInTheDocument(); expect((within(dlg).getByLabelText('Tujuan') as HTMLTextAreaElement).value).toBe('');
