@@ -281,3 +281,5 @@ td.heat { text-align: center; font-variant-numeric: tabular-nums; }
 td.heat.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); } td.heat.warn { background: color-mix(in srgb, var(--warn) 22%, transparent); } td.heat.bad { background: color-mix(in srgb, var(--bad) 26%, transparent); font-weight: 600; }
 .lt-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0 0 12px; font-size: .86rem; }
 .lt-summary dt { color: var(--muted); } .lt-summary dd { margin: 0; overflow-wrap: anywhere; }
+fieldset.tpl-fills { border: 1px solid var(--accent); border-radius: 6px; background: var(--accent-soft); padding: 10px 12px 12px; display: grid; gap: 8px; margin: 0; min-width: 0; }
+fieldset.tpl-fills legend { font-weight: 600; font-size: .88rem; padding: 0 6px; color: var(--accent); }

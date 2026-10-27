@@ -30,7 +30,7 @@ describe('Setup: templat dikelompokkan dan bagian [ISI: ...] wajib diganti', () 
   it('memilih templat pemasangan mengisi tujuan, menyebut yang harus diisi, menaikkan anggaran, dan mengunci Buat proses sampai diganti', async () => {
     const { dlg, calls } = await open(), goal = within(dlg).getByLabelText('Tujuan') as HTMLTextAreaElement, create = within(dlg).getByRole('button', { name: 'Buat proses' });
     await userEvent.click(within(dlg).getByRole('button', { name: 'Pasang PostgreSQL, database, dan backup' }));
-    expect(goal.value).toContain('[ISI: nama]'); expect(within(dlg).getByText(/Yang perlu Anda isi di Tujuan: Nama database, Pengguna aplikasi/)).toBeInTheDocument();
+    expect(goal.value).toContain('[ISI: nama]'); expect(within(within(dlg).getByRole('group', { name: 'Isian yang dibutuhkan' })).getAllByRole('textbox').map((x) => x.getAttribute('aria-label'))).toEqual(['nama', 'nama pengguna']);
     expect((within(dlg).getByLabelText('Maks. giliran agen') as HTMLInputElement).value).toBe('40'); expect((within(dlg).getByLabelText('Anggaran token') as HTMLInputElement).value).toBe('300000');
     expect(create).toBeDisabled(); expect(within(dlg).getByRole('alert')).toHaveTextContent('Tujuan masih berisi [ISI: nama]');
     await userEvent.clear(goal); await userEvent.type(goal, 'Nama database: appdb. Pengguna aplikasi: appuser.');
@@ -45,6 +45,6 @@ describe('Setup: templat dikelompokkan dan bagian [ISI: ...] wajib diganti', () 
     await userEvent.click(within(dlg).getByRole('button', { name: 'Pasang PostgreSQL, database, dan backup' })); expect(create).toBeDisabled();
     await userEvent.click(within(dlg).getByRole('button', { name: 'Diagnosis awal (baca saja)' }));
     expect(create).toBeEnabled(); expect((within(dlg).getByLabelText('Maks. giliran agen') as HTMLInputElement).value).toBe('30'); expect((within(dlg).getByLabelText('Anggaran token') as HTMLInputElement).value).toBe('200000');
-    expect(within(dlg).queryByText(/Yang perlu Anda isi/)).not.toBeInTheDocument();
+    expect(within(dlg).queryByRole('group', { name: 'Isian yang dibutuhkan' })).not.toBeInTheDocument();
   });
 });

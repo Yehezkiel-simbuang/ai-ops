@@ -43,7 +43,7 @@ describe('Proses baru: dua blok', () => {
     const dlg = await open();
     await userEvent.click(within(dlg).getByRole('button', { name: 'Pasang PostgreSQL, database, dan backup' }));
     const chosen = within(dlg).getByRole('region', { name: 'Atur proses' });
-    expect(within(chosen).getByText('Yang perlu Anda isi di Tujuan: Nama database. Agen tidak menebak nilainya.')).toBeInTheDocument(); expect(within(chosen).getByText('Rencana langkah')).toBeInTheDocument(); expect(within(chosen).getByText('Pasang PostgreSQL')).toBeInTheDocument();
+    expect(within(chosen).getByRole('group', { name: 'Isian yang dibutuhkan' })).toBeInTheDocument(); expect(within(chosen).getByLabelText('nama')).toBeInTheDocument(); expect(within(chosen).getByText('Rencana langkah')).toBeInTheDocument(); expect(within(chosen).getByText('Pasang PostgreSQL')).toBeInTheDocument();
     expect(within(dlg).getByRole('button', { name: 'Pasang PostgreSQL, database, dan backup' })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(within(dlg).getByRole('button', { name: 'Pasang PostgreSQL, database, dan backup' }));
     expect(within(dlg).getByText(/Pilih templat di blok kiri/)).toBeInTheDocument(); expect((within(dlg).getByLabelText('Tujuan') as HTMLTextAreaElement).value).toBe('');
