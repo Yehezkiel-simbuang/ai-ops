@@ -107,6 +107,7 @@ async function loop(runId: string): Promise<void> {
 export async function start(runId: string) {
   const run = await Store.getRun(runId); if (!run) throw bad('Run tidak ada');
   if (!run.server_id) throw bad('Pilih server untuk run ini');
+  if (run.turns >= run.max_turns || run.tokens >= run.token_budget) throw bad('Anggaran run sudah habis; tambahkan anggaran dulu');
   if (!(await Store.getRole('setup'))) throw bad('Atur model peran Setup server dulu (Pengaturan)');
   if (active.has(runId)) throw bad('Run sudah berjalan');
   active.set(runId, { stop: false }); await setStatus(runId, 'running'); await audit('pengguna', 'run.mulai', runId);

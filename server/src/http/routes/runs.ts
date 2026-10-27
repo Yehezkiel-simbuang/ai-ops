@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import * as Agent from '../../agent.js';
-import { HttpError, bad, db } from '../../context.js';
+import { HttpError, audit, bad, db } from '../../context.js';
 import { planFromDir } from '../../plan.js';
 import * as Servers from '../../servers.js';
 import * as Store from '../../store.js';
@@ -13,7 +13,9 @@ const createBody = z.object({
   serverId: z.coerce.number(), name: z.string().optional(), goal: z.string().optional(), template: z.string().nullish(), dir: z.string().optional(),
   maxTurns: z.coerce.number().min(3).max(200).optional(), tokenBudget: z.coerce.number().min(1000).max(5_000_000).optional()
 });
-const stepBody = z.object({ run: z.string(), step: z.coerce.number(), status: z.string(), note: z.string().nullish() });
+const budgetBody = z.object({ addTurns: z.coerce.number().int().min(0).max(200).default(0), addTokens: z.coerce.number().int().min(0).max(5_000_000).default(0) })
+  .refine((b) => b.addTurns > 0 || b.addTokens > 0, { message: 'Isi tambahan giliran atau token' });
+const stepBody =z.object({ run: z.string(), step: z.coerce.number(), status: z.string(), note: z.string().nullish() });
 
 /** Susun rencana awal dari templat atau analisis folder proyek. */
 function initialPlan(b: z.infer<typeof createBody>) {
@@ -47,6 +49,12 @@ export function runRoutes(): Router {
   }));
   r.get('/runs/:id', handle((req) => runDetail(strParam(req))));
   r.delete('/runs/:id', handle(async (req) => { const id = strParam(req); await Agent.stop(id).catch(() => undefined); await Store.deleteRun(id); return { ok: true }; }));
+  r.post('/runs/:id/budget', handle(async (req) => {
+    const id = strParam(req), b = parse(budgetBody, req.body);
+    if (!(await Store.getRun(id))) throw bad('Run tidak ada');
+    await audit('pengguna', 'run.anggaran', `${id} +${b.addTurns} giliran +${b.addTokens} token`);
+    return Store.topUpRun(id, b.addTurns, b.addTokens);
+  }));
   r.post('/runs/:id/start', handle((req) => Agent.start(strParam(req))));
   r.post('/runs/:id/stop', handle(async (req) => { await Agent.stop(strParam(req)); return { ok: true }; }));
   r.post('/commands/:id/approve', handle((req) => Agent.decide(idParam(req), true)));

@@ -20,6 +20,13 @@ const CMD_STATUS = (c: RunCommand): [Tone, string] => ({
   done: ['ok', 'selesai'], failed: ['bad', `gagal (exit ${c.exit_code})`], running: ['acc', 'berjalan'], rejected: ['mute', 'ditolak'], blocked: ['bad', 'diblokir'], approved: ['acc', 'disetujui']
 } as Record<string, [Tone, string]>)[c.status] ?? ['mute', c.status];
 
+/** Tambahan sekali tekan; cukup untuk beberapa langkah lagi tanpa membuat anggaran terlalu longgar. */
+export const TOP_UP = { addTurns: 20, addTokens: 150_000 };
+const WARN_AT = 0.8;
+export const usage = (r: Pick<Run, 'turns' | 'max_turns' | 'tokens' | 'token_budget'>) => ({ turns: r.turns / r.max_turns, tokens: r.tokens / r.token_budget });
+export const outOfBudget = (r: Pick<Run, 'status' | 'turns' | 'max_turns' | 'tokens' | 'token_budget'>) => r.status === 'stopped' && (r.turns >= r.max_turns || r.tokens >= r.token_budget);
+const nearLimit = (r: Run) => { const u = usage(r); return Math.max(u.turns, u.tokens) >= WARN_AT; };
+
 function Plan({ run }: { run: Run }) {
   const n = run.steps.length, count = (s: PlanStepStatus) => run.steps.filter((x) => x.status === s).length;
   return (
@@ -101,6 +108,10 @@ function Body({ id, d }: { id: string; d: RunDetail }) {
   const active = run.status === 'running' || run.status === 'waiting_approval';
   const invalidate = [['runs'], ['overview']];
   const start = useAction(() => post(`/api/runs/${id}/start`), { success: 'Agen dimulai', invalidate });
+  const topUp = useAction(() => post(`/api/runs/${id}/budget`, TOP_UP), { success: 'Anggaran ditambah', invalidate });
+  const resume = useAction(async () => { await post(`/api/runs/${id}/budget`, TOP_UP); await post(`/api/runs/${id}/start`); }, { success: 'Agen dilanjutkan', invalidate });
+  const spent = outOfBudget(run), warn = active && nearLimit(run);
+  const extra = `${TOP_UP.addTurns} giliran dan ${fmt(TOP_UP.addTokens)} token`;
   const stop = useAction(() => post(`/api/runs/${id}/stop`), { invalidate });
   const remove = useAction(() => del(`/api/runs/${id}`), { invalidate, onSuccess: () => navigate('/setup') });
   const confirmDelete = async () => { if (await confirm('Hapus proses ini beserta seluruh riwayat perintahnya?', 'Hapus')) await remove.mutateAsync(); };
@@ -108,11 +119,15 @@ function Body({ id, d }: { id: string; d: RunDetail }) {
     <>
       <PageHead title={run.name} icon={IconWrench}>
         <RunStatusBadge status={run.status} />
-        {active ? <Button icon={IconStop} onClick={() => stop.mutateAsync()}>Hentikan</Button> : <Button primary icon={IconPlay} onClick={() => start.mutateAsync()}>{run.status === 'draft' ? 'Mulai' : 'Jalankan lagi'}</Button>}
+        {active ? <Button icon={IconStop} onClick={() => stop.mutateAsync()}>Hentikan</Button>
+          : spent ? <Button primary icon={IconPlay} onClick={() => resume.mutateAsync()}>Lanjutkan (+{extra})</Button>
+          : <Button primary icon={IconPlay} onClick={() => start.mutateAsync()}>{run.status === 'draft' ? 'Mulai' : 'Jalankan lagi'}</Button>}
         <Button icon={IconTrash} aria-label="Hapus proses" onClick={confirmDelete} />
       </PageHead>
       <div className="lbl" style={{ margin: '-8px 0 16px' }}>{run.server_name ?? 'tanpa server'} | tujuan: {run.goal}</div>
       {run.summary && <Hint><span>{run.summary}</span></Hint>}
+      {spent && <Hint><span>Agen berhenti karena anggaran habis, bukan karena gagal. Langkah yang sudah selesai dan riwayat percakapan tetap tersimpan; Lanjutkan menambah {extra} dan agen meneruskan dari titik berhenti. Periksa dulu daftar langkah di kanan agar tahu apa yang sudah terpasang.</span></Hint>}
+      {warn && <Hint><span>Anggaran hampir habis (giliran {run.turns} dari {run.max_turns}, token {fmt(run.tokens)} dari {fmt(run.token_budget)}). Bila habis di tengah langkah, server bisa setengah terpasang. <Button icon={IconGauge} onClick={() => topUp.mutateAsync()}>Tambah {extra}</Button></span></Hint>}
       <div className="cols wide-left">
         <div><h2><IconTerminal size={16} aria-hidden />Jalannya agen</h2><p className="lbl" style={{ marginBottom: 8 }}>Terbaru di atas. Perintah yang menunggu persetujuan selalu muncul paling atas.</p><Timeline d={d} /></div>
         <Plan run={run} />

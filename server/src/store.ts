@@ -83,6 +83,13 @@ export type RunRow = Record<string, any> & { steps: Array<Record<string, any>>; 
 async function withExtras(r: Record<string, any> | undefined): Promise<RunRow | undefined> { return r ? ({ ...r, steps: await stepsOf(r.id), tokens: await runTokens(r.id) } as RunRow) : undefined; }
 export async function runs() { const rows = await db().query('SELECT r.*, s.name AS server_name FROM runs r LEFT JOIN servers s ON s.id=r.server_id ORDER BY r.created DESC LIMIT 50'); return Promise.all(rows.map((r) => withExtras(r) as Promise<RunRow>)); }
 export async function getRun(id: string) { return withExtras(await db().one('SELECT r.*, s.name AS server_name FROM runs r LEFT JOIN servers s ON s.id=r.server_id WHERE r.id=$1', [id])); }
+/** Batas atas yang sama dengan saat run dibuat (lihat createBody di routes/runs.ts). */
+export const RUN_CAPS = { maxTurns: 200, tokenBudget: 5_000_000 };
+/** Tambah anggaran run yang sudah ada; berlaku juga untuk run yang sedang berjalan karena loop membaca batas tiap giliran. */
+export async function topUpRun(id: string, addTurns: number, addTokens: number) {
+  await db().exec('UPDATE runs SET max_turns=LEAST(max_turns+$2,$4), token_budget=LEAST(token_budget+$3,$5), updated=$6 WHERE id=$1', [id, addTurns, addTokens, RUN_CAPS.maxTurns, RUN_CAPS.tokenBudget, Date.now()]);
+  return getRun(id);
+}
 export interface NewRun { name: string; serverId?: number | null; goal?: string; dir?: string; steps?: Array<{ title: string; detail?: string }>; maxTurns?: number; tokenBudget?: number }
 export async function newRun(o: NewRun) {
   const id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), now = Date.now();
