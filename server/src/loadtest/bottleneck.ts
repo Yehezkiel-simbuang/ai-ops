@@ -17,6 +17,11 @@ export interface BottleneckReport { basis: 'terukur' | 'perkiraan'; stageIdx: nu
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 const HOST = '_host';
 
+/** Kapasitas pembagi untuk satu layanan: CPU terhadap batasnya (atau jumlah core server; 100 = satu core), memori terhadap batasnya (atau total memori server). */
+function capsOf(lim: Limit | undefined, cores: number, hostMem: number, memLimitMb: number): { cpuCap: number; memCap: number } {
+  return { cpuCap: (lim?.cpus ?? cores) * 100, memCap: lim?.memMb ?? (memLimitMb && hostMem && memLimitMb < hostMem * 0.98 ? memLimitMb : hostMem) };
+}
+
 /** Pemakaian rata-rata (0..1+) tiap layanan pada tiap tahap: CPU terhadap batas (atau core server), memori terhadap batas (atau total memori server). */
 export function usage(stages: StageWindow[], samples: Sample[], arch: Architecture | null, limits: Record<string, Limit>): Usage[] {
   if (!samples.length) return [];
@@ -29,10 +34,29 @@ export function usage(stages: StageWindow[], samples: Sample[], arch: Architectu
       if (!rows.length) return { idx: st.idx, vus: st.vus, cpu: null, mem: null };
       const avg = (f: (s: Sample) => number) => rows.reduce((a, s) => a + f(s), 0) / rows.length;
       if (service === HOST) return { idx: st.idx, vus: st.vus, cpu: avg((s) => s.cpu) / cores, mem: hostMem ? avg((s) => s.mem_mb) / hostMem : null };
-      const lim = limits[service], cpuCap = (lim?.cpus ?? cores) * 100, memCap = lim?.memMb ?? (rows[0]!.mem_limit_mb && hostMem && rows[0]!.mem_limit_mb < hostMem * 0.98 ? rows[0]!.mem_limit_mb : hostMem);
+      const { cpuCap, memCap } = capsOf(limits[service], cores, hostMem, rows[0]!.mem_limit_mb);
       return { idx: st.idx, vus: st.vus, cpu: avg((s) => s.cpu) / cpuCap, mem: memCap ? avg((s) => s.mem_mb) / memCap : null };
     })
   }));
+}
+
+export interface LiveService { service: string; role: Role | 'host'; cpuCores: number; cpu: number | null; memMb: number; mem: number | null }
+/** Keadaan untuk tampilan langsung: `at` = waktu sampel terakhir; `stageIdx` = tahap yang sedang berjalan (jumlah tahap yang sudah dilaporkan); `vus` = pengguna virtual tahap itu. */
+export interface Live { at: number; stageIdx: number; vus: number | null; maxVus: number; services: LiveService[]; host: { cores: number; load: number; cpu: number; mem: number | null } | null }
+
+/** Pemakaian pada sampel terbaru (angka yang sama dengan usage(), hanya satu titik waktu) supaya diagram bisa hidup selama uji berjalan. Null bila belum ada sampel. */
+export function liveUsage(samples: Sample[], plan: Array<{ vus: number }>, done: number, arch: Architecture | null, limits: Record<string, Limit>): Live | null {
+  if (!samples.length) return null;
+  const at = samples.reduce((m, s) => Math.max(m, s.ts), 0), rows = samples.filter((s) => s.ts === at);
+  const host = rows.find((s) => s.service === HOST), cores = host?.cores || 1, hostMem = host?.mem_limit_mb || 0, roleOf = new Map((arch?.nodes ?? []).map((n) => [n.name, n.role] as const));
+  return {
+    at, stageIdx: done, vus: plan[done]?.vus ?? null, maxVus: plan.reduce((m, p) => Math.max(m, p.vus), 0),
+    services: rows.filter((s) => s.service !== HOST).map((s) => {
+      const { cpuCap, memCap } = capsOf(limits[s.service], cores, hostMem, s.mem_limit_mb);
+      return { service: s.service, role: roleOf.get(s.service) ?? 'app', cpuCores: s.cpu / 100, cpu: cpuCap ? s.cpu / cpuCap : null, memMb: s.mem_mb, mem: memCap ? s.mem_mb / memCap : null };
+    }),
+    host: host ? { cores, load: host.cpu, cpu: host.cpu / cores, mem: hostMem ? host.mem_mb / hostMem : null } : null
+  };
 }
 
 const ADVICE: Record<Role, { cpu: string[]; mem: string[] }> = {

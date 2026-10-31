@@ -36,7 +36,10 @@ export type Confidence = 'terukur' | 'kuat' | 'dugaan';
 export interface Finding { component: string; role: Role | 'host' | 'generator' | 'tidak diketahui'; confidence: Confidence; title: string; evidence: string[]; advice: string[]; score: number }
 export interface UsageRow { service: string; role: Role | 'host'; stages: Array<{ idx: number; vus: number; cpu: number | null; mem: number | null }> }
 export interface BottleneckReport { basis: 'terukur' | 'perkiraan'; stageIdx: number | null; headline: string; findings: Finding[]; usage: UsageRow[]; cautions: string[] }
-export type LoadTestDetail = Omit<LoadTest, 'stages'> & { plan: LoadStage[]; stages: StageResult[]; analysis: Analysis; ai: AiExplanation | null; architecture?: Architecture | null; bottleneck?: BottleneckReport };
+/** Keadaan terbaru selama uji berjalan: pemakaian sampel terakhir tiap komponen (0..1+ terhadap kapasitasnya) dan tahap yang sedang jalan. Null bila belum ada sampel atau uji tidak berjalan. */
+export interface LiveService { service: string; role: Role | 'host'; cpuCores: number; cpu: number | null; memMb: number; mem: number | null }
+export interface Live { at: number; stageIdx: number; vus: number | null; maxVus: number; services: LiveService[]; host: { cores: number; load: number; cpu: number; mem: number | null } | null }
+export type LoadTestDetail = Omit<LoadTest, 'stages'> & { plan: LoadStage[]; stages: StageResult[]; analysis: Analysis; ai: AiExplanation | null; architecture?: Architecture | null; bottleneck?: BottleneckReport; live?: Live | null };
 
 export interface LoadTestStatus { enabled: boolean; allowedHosts: string[]; runner: { online: boolean; lastSeen: number | null; info: { k6: string; cpus: number; version: string } | null } }
 

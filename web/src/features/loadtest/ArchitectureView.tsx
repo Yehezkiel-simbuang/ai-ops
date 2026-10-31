@@ -1,8 +1,9 @@
 // Visualisasi arsitektur: tiap server berupa kotak, tiap komponen berupa blok berwarna menurut perannya, dan garis menunjukkan siapa memanggil siapa.
 // Garis di dalam satu kotak = satu server yang sama (tanpa jaringan); garis putus-putus antar kotak = server berbeda (lewat jaringan).
-import { useMemo } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 import { Badge } from '@/components/ui/Badge';
-import type { ArchEdge, Architecture, Placement, Role, ServerBox } from './types';
+import { toneOf } from '../lab/Stage';
+import type { ArchEdge, Architecture, Live, LiveService, Placement, Role, ServerBox } from './types';
 
 export const ROLE_LABEL: Record<Role, string> = { proxy: 'Proxy / load balancer', app: 'Aplikasi', db: 'Database', cache: 'Cache', queue: 'Antrean pesan', vector: 'Vector database', search: 'Mesin pencari' };
 const BW = 158, BH = 50, VG = 12, PAD = 14, HEAD = 30, GAP = 56, TG = 46, TOP_CROSS = 80, TOP_PLAIN = 22;   // ruang di atas hanya untuk garis antar server, bila ada
@@ -22,16 +23,20 @@ function layout(boxes: ServerBox[], TOP: number): { pos: Map<string, Pos>; width
   return { pos, widths, xs, height: TOP + HEAD + maxRows * (BH + VG) + PAD, width: x - GAP + 8 };
 }
 
-function Edge({ e, pos, i }: { e: ArchEdge; pos: Map<string, Pos>; i: number }) {
+/** Garis bergerak (tampilan langsung): durasi satu putaran dalam detik; makin banyak pengguna virtual, makin cepat. */
+const flowStyle = (dur: number | undefined): CSSProperties | undefined => (dur ? ({ '--flow-dur': `${dur}s` } as CSSProperties) : undefined);
+const flowDuration = (live: Live | null | undefined): number | undefined => (live ? 1.8 - 1.3 * Math.max(0.15, Math.min(1, live.vus && live.maxVus ? live.vus / live.maxVus : 0.15)) : undefined);
+
+function Edge({ e, pos, i, dur }: { e: ArchEdge; pos: Map<string, Pos>; i: number; dur?: number | undefined }) {
   const a = pos.get(e.from), b = pos.get(e.to); if (!a || !b) return null;
-  const same = a.box === b.box, cls = same ? 'arch-edge same' : 'arch-edge cross';
+  const same = a.box === b.box, cls = `${same ? 'arch-edge same' : 'arch-edge cross'}${dur ? ' live' : ''}`;
   if (same) {
     if (b.col > a.col) {   // lapisan berikutnya di kanan: garis lurus melengkung dari sisi kanan ke sisi kiri
       const x1 = a.x + BW, y1 = a.y + BH / 2, x2 = b.x, y2 = b.y + BH / 2, mx = (x1 + x2) / 2;
-      return <path className={cls} d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} markerEnd="url(#arch-arrow)"><title>{`${e.from} ke ${e.to} (${e.label}): satu server`}</title></path>;
+      return <path className={cls} style={flowStyle(dur)} d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} markerEnd="url(#arch-arrow)"><title>{`${e.from} ke ${e.to} (${e.label}): satu server`}</title></path>;
     }
     const x = a.x + BW, y1 = a.y + BH / 2, y2 = b.y + BH / 2, bow = 22 + (i % 2) * 6;   // lapisan yang sama: busur di sisi kanan
-    return <path className={cls} d={`M ${x} ${y1} C ${x + bow} ${y1}, ${x + bow} ${y2}, ${x} ${y2}`} markerEnd="url(#arch-arrow)"><title>{`${e.from} ke ${e.to} (${e.label}): satu server`}</title></path>;
+    return <path className={cls} style={flowStyle(dur)} d={`M ${x} ${y1} C ${x + bow} ${y1}, ${x + bow} ${y2}, ${x} ${y2}`} markerEnd="url(#arch-arrow)"><title>{`${e.from} ke ${e.to} (${e.label}): satu server`}</title></path>;
   }
   return null;   // garis antar server digambar per pasangan server oleh CrossEdge
 }
@@ -48,19 +53,24 @@ function crossEdges(edges: ArchEdge[], pos: Map<string, Pos>): Cross[] {
   return [...m.values()];
 }
 
-function CrossEdge({ c, boxes, xs, widths, i, TOP }: { c: Cross; boxes: ServerBox[]; xs: number[]; widths: number[]; i: number; TOP: number }) {
+function CrossEdge({ c, boxes, xs, widths, i, TOP, dur }: { c: Cross; boxes: ServerBox[]; xs: number[]; widths: number[]; i: number; TOP: number; dur?: number | undefined }) {
   const sx = xs[c.from]! + widths[c.from]! / 2, tx = xs[c.to]! + widths[c.to]! / 2, y = TOP - 6, lift = 16 + (i % 4) * 11, mid = (sx + tx) / 2;
   const text = c.labels.join(', ');
   return (
     <g>
-      <path className="arch-edge cross" d={`M ${sx} ${y} C ${sx} ${y - lift - 24}, ${tx} ${y - lift - 24}, ${tx} ${y}`} markerEnd="url(#arch-arrow)"><title>{`${boxes[c.from]!.label} ke ${boxes[c.to]!.label} (${text}): lewat jaringan antar server; ${c.pairs.join(', ')}`}</title></path>
+      <path className={`arch-edge cross${dur ? ' live' : ''}`} style={flowStyle(dur)} d={`M ${sx} ${y} C ${sx} ${y - lift - 24}, ${tx} ${y - lift - 24}, ${tx} ${y}`} markerEnd="url(#arch-arrow)"><title>{`${boxes[c.from]!.label} ke ${boxes[c.to]!.label} (${text}): lewat jaringan antar server; ${c.pairs.join(', ')}`}</title></path>
       <text className="arch-edge-label" x={mid} y={y - (lift + 24) * 0.75 - 3} textAnchor="middle">{text}</text>
     </g>
   );
 }
 
-/** Satu susunan (sekarang atau disarankan) sebagai SVG. */
-export function ArchitectureDiagram({ boxes, edges, label }: { boxes: ServerBox[]; edges: ArchEdge[]; label: string }) {
+const pct = (v: number): string => `${Math.round(v * 100)}%`;
+/** Teks tooltip pemakaian nyata satu komponen. */
+const usageText = (u: LiveService): string => `CPU ${u.cpuCores.toFixed(2)} core${u.cpu != null ? ` (${pct(u.cpu)} dari kapasitasnya)` : ''}, memori ${Math.round(u.memMb)} MB${u.mem != null ? ` (${pct(u.mem)})` : ''}`;
+
+/** Satu susunan (sekarang atau disarankan) sebagai SVG. Dengan `live`: garis bergerak, serta bilah dan angka pemakaian CPU nyata di tiap komponen. */
+export function ArchitectureDiagram({ boxes, edges, label, live }: { boxes: ServerBox[]; edges: ArchEdge[]; label: string; live?: Live | null }) {
+  const dur = flowDuration(live), use = useMemo(() => new Map((live?.services ?? []).map((s) => [s.service, s] as const)), [live]);
   const hasCross = useMemo(() => { const box = new Map(boxes.flatMap((b, i) => b.nodes.map((n) => [n.name, i] as const))); return edges.some((e) => box.has(e.from) && box.has(e.to) && box.get(e.from) !== box.get(e.to)); }, [boxes, edges]);
   const TOP = hasCross ? TOP_CROSS : TOP_PLAIN, L = useMemo(() => layout(boxes, TOP), [boxes, TOP]);
   return (
@@ -74,14 +84,17 @@ export function ArchitectureDiagram({ boxes, edges, label }: { boxes: ServerBox[
             <text className="arch-server-label" x={L.xs[i]! + PAD} y={TOP + 16}>{b.label}</text>
           </g>
         ))}
-        {edges.map((e, i) => <Edge key={`${e.from}>${e.to}`} e={e} pos={L.pos} i={i} />)}
-        {crossEdges(edges, L.pos).map((c, i) => <CrossEdge key={`${c.from}>${c.to}`} c={c} boxes={boxes} xs={L.xs} widths={L.widths} i={i} TOP={TOP} />)}
-        {boxes.flatMap((b) => b.nodes.map((n) => { const p = L.pos.get(n.name)!; return (
-          <g key={n.name} className={`arch-node role-${n.role}`}>
+        {edges.map((e, i) => <Edge key={`${e.from}>${e.to}`} e={e} pos={L.pos} i={i} dur={dur} />)}
+        {crossEdges(edges, L.pos).map((c, i) => <CrossEdge key={`${c.from}>${c.to}`} c={c} boxes={boxes} xs={L.xs} widths={L.widths} i={i} TOP={TOP} dur={dur} />)}
+        {boxes.flatMap((b) => b.nodes.map((n) => { const p = L.pos.get(n.name)!, u = use.get(n.name), tone = u?.cpu != null ? toneOf(u.cpu) : 'none'; return (
+          <g key={n.name} className={`arch-node role-${n.role}${u ? ' measured' : ''}`}>
             <rect x={p.x} y={p.y} width={BW} height={BH} rx={6} />
-            <text className="arch-name" x={p.x + 10} y={p.y + 21}>{n.name.length > 24 ? `${n.name.slice(0, 23)}...` : n.name}</text>
-            <text className="arch-role" x={p.x + 10} y={p.y + 40}>{ROLE_LABEL[n.role]}</text>
-            <title>{`${n.name} (${n.image})`}</title>
+            <text className="arch-name" x={p.x + 10} y={p.y + 21}>{n.name.length > (u?.cpu != null ? 17 : 24) ? `${n.name.slice(0, 16)}...` : n.name}</text>
+            <text className="arch-role" x={p.x + 10} y={p.y + 38}>{ROLE_LABEL[n.role]}</text>
+            {u && <rect className="arch-bar-bg" x={p.x + 10} y={p.y + BH - 8} width={BW - 20} height={4} rx={2} />}
+            {u && u.cpu != null && <rect className={`arch-bar ${tone}`} x={p.x + 10} y={p.y + BH - 8} width={Math.max(2, (BW - 20) * Math.min(1, u.cpu))} height={4} rx={2} />}
+            {u && u.cpu != null && <text className={`arch-util ${tone}`} x={p.x + BW - 10} y={p.y + 21} textAnchor="end">{pct(u.cpu)}</text>}
+            <title>{`${n.name} (${n.image})${u ? `\n${usageText(u)}` : ''}`}</title>
           </g>); }))}
       </svg>
     </div>

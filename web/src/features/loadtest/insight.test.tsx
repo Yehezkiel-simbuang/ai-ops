@@ -2,13 +2,14 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { mockApi, renderWithProviders } from '@/test/utils';
-import { ArchitectureView } from './ArchitectureView';
+import { ArchitectureDiagram, ArchitectureView } from './ArchitectureView';
+import { LiveFlow } from './LiveFlow';
 import { BottleneckPanel } from './BottleneckPanel';
 import { finished, running } from './fixtures';
 import { LoadTestDetailPage } from './LoadTestDetailPage';
 import { LoadTestsPage } from './LoadTestsPage';
 import { NewLoadTestPage } from './NewLoadTestPage';
-import type { Architecture, BottleneckReport } from './types';
+import type { Architecture, BottleneckReport, Live } from './types';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -103,6 +104,57 @@ describe('halaman hasil uji', () => {
     unmount(); vi.unstubAllGlobals();
     mockApi({ 'GET /api/loadtests/5': { body: { ...running(), bottleneck: report(), architecture: arch() } } });
     page(); await screen.findByText(/Hasil per tahap/); expect(screen.queryByRole('heading', { name: 'Di mana bottleneck-nya' })).not.toBeInTheDocument();
+  });
+});
+
+describe('diagram langsung selama uji berjalan', () => {
+  const NOW = 1_800_000_000_000;   // waktu acuan tetap: umur sampel tidak bergantung pada kecepatan tes
+  const live = (over: Partial<Live> = {}): Live => ({
+    at: NOW - 4_000, stageIdx: 1, vus: 40, maxVus: 80, host: { cores: 2, load: 1.3, cpu: 0.65, mem: 0.4 },
+    services: [
+      { service: 'lb', role: 'proxy', cpuCores: 0.1, cpu: 0.05, memMb: 30, mem: 0.01 }, { service: 'api', role: 'app', cpuCores: 1.1, cpu: 0.55, memMb: 400, mem: 0.1 },
+      { service: 'db', role: 'db', cpuCores: 1.9, cpu: 0.95, memMb: 900, mem: 0.22 }
+    ], ...over
+  });
+
+  it('tiap komponen yang punya sampel menampilkan pemakaian CPU nyata, dengan nada menurut tingkatnya; yang tanpa sampel tetap polos', () => {
+    renderWithProviders(<LiveFlow arch={arch()} live={live()} now={NOW} />);
+    const svg = screen.getByRole('img', { name: 'Aliran data langsung' });
+    expect(within(svg).getByText('95%')).toHaveClass('bad'); expect(within(svg).getByText('55%')).not.toHaveClass('bad'); expect(within(svg).getByText('5%')).toBeInTheDocument();
+    expect(svg.querySelectorAll('rect.arch-bar').length).toBe(3); expect(svg.querySelector('rect.arch-bar.bad')).not.toBeNull();   // cache tidak punya sampel: tanpa bilah
+    expect(svg.querySelector('g.arch-node:not(.measured) text.arch-util')).toBeNull();
+    expect(svg.querySelector('title')!.textContent).toBe('Aliran data langsung');
+    const dbTitle = [...svg.querySelectorAll('g.arch-node title')].map((t) => t.textContent).find((t) => /^db /.test(t ?? ''));
+    expect(dbTitle).toMatch(/CPU 1\.90 core \(95% dari kapasitasnya\), memori 900 MB \(22%\)/);
+  });
+
+  it('garis bergerak, makin cepat bila pengguna virtual makin banyak; tanpa sampel garis diam', () => {
+    const dur = (l: Live | null) => { const { container, unmount } = renderWithProviders(<ArchitectureDiagram boxes={arch().current} edges={arch().edges} label="x" live={l} />); const p = container.querySelector('path.arch-edge'); const out = { live: p?.classList.contains('live'), dur: (p as SVGElement | null)?.style.getPropertyValue('--flow-dur') ?? '' }; unmount(); return out; };
+    const slow = dur(live({ vus: 5 })), fast = dur(live({ vus: 80 })), off = dur(null);
+    expect(slow.live).toBe(true); expect(fast.live).toBe(true); expect(off.live).toBe(false); expect(off.dur).toBe('');
+    expect(parseFloat(fast.dur)).toBeLessThan(parseFloat(slow.dur)); expect(parseFloat(fast.dur)).toBeGreaterThanOrEqual(0.5); expect(parseFloat(slow.dur)).toBeLessThanOrEqual(1.8);
+  });
+
+  it('keterangan menyebut tahap, pengguna virtual, umur sampel, dan server uji; sampel basi diberi tanda; belum ada sampel dijelaskan', () => {
+    const { unmount } = renderWithProviders(<LiveFlow arch={arch()} live={live()} now={NOW} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Tahap 2: 40 pengguna virtual (tahap terbesar 80). Pemakaian dari sampel 4 dtk lalu.'); expect(screen.getByText(/Server uji: CPU 65% dari 2 core, memori 40%/)).toBeInTheDocument();
+    expect(screen.getByText(/laju per garis tidak diukur/)).toBeInTheDocument();
+    unmount(); const stale = renderWithProviders(<LiveFlow arch={arch()} live={live({ at: NOW - 45_000 })} now={NOW} />);
+    expect(screen.getByRole('status')).toHaveTextContent(/45 dtk lalu; pengambilan sampel tertunda/); stale.unmount();
+    renderWithProviders(<LiveFlow arch={arch()} live={null} now={NOW} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Menunggu sampel pertama'); expect(screen.queryByText(/Server uji:/)).not.toBeInTheDocument();
+  });
+
+  it('halaman uji: bagian muncul hanya saat berjalan dan ada susunan', async () => {
+    const page = () => renderWithProviders(<Routes><Route path="/uji-beban/:id" element={<LoadTestDetailPage />} /></Routes>, { route: '/uji-beban/5' });
+    mockApi({ 'GET /api/loadtests/5': { body: { ...running(), architecture: arch(), live: live() } } });
+    const first = page(); expect(await screen.findByRole('heading', { name: 'Aliran data langsung' })).toBeInTheDocument(); expect(screen.getByRole('img', { name: 'Aliran data langsung' })).toBeInTheDocument();
+    first.unmount(); vi.unstubAllGlobals();
+    mockApi({ 'GET /api/loadtests/5': { body: { ...running(), architecture: null, live: null } } });
+    const second = page(); await screen.findByText(/Hasil per tahap/); expect(screen.queryByRole('heading', { name: 'Aliran data langsung' })).not.toBeInTheDocument();
+    second.unmount(); vi.unstubAllGlobals();
+    mockApi({ 'GET /api/loadtests/5': { body: { ...finished(), architecture: arch(), live: null } } });
+    page(); await screen.findByRole('heading', { name: 'Arsitektur dan penempatan komponen' }); expect(screen.queryByRole('heading', { name: 'Aliran data langsung' })).not.toBeInTheDocument();
   });
 });
 

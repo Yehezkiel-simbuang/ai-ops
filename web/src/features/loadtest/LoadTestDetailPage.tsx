@@ -15,6 +15,7 @@ import { ago, dateTime } from '@/lib/format';
 import { peakVus, totalSeconds } from './form';
 import { ArchitectureView } from './ArchitectureView';
 import { BottleneckPanel } from './BottleneckPanel';
+import { LiveFlow } from './LiveFlow';
 import { P95Chart, ThroughputChart } from './StageCharts';
 import { STATUS_BADGE } from './LoadTestsPage';
 import { isActive, loadQ } from './queries';
@@ -103,6 +104,7 @@ export function LoadTestDetailPage() {
           </div>
           {t.status === 'queued' && <Hint icon={IconAlert}>Menunggu runner mengambil uji ini. Bila terlalu lama, periksa bahwa kontainer runner berjalan (<code>docker compose --profile loadtest up -d</code>).</Hint>}
           {t.status === 'running' && <div style={{ marginBottom: 14 }}><Progress total={t.plan.length} done={t.stages.length} running={1} failed={0} /><div className="lbl" style={{ marginTop: 4 }}>Berjalan: {t.stages.length} dari {t.plan.length} tahap sudah dilaporkan. Halaman menyegarkan diri.</div></div>}
+          {t.status === 'running' && t.architecture && <Section title="Aliran data langsung" icon={IconPulse}><LiveFlow arch={t.architecture} live={t.live} /></Section>}
           {(t.status === 'failed' || t.status === 'cancelled') && t.error && <Hint icon={IconAlert}><span>{t.error}</span></Hint>}
           {t.status === 'draft' ? (
             <Note>Ini masih draf dan belum berjalan. Periksa rencananya: {t.plan.map((s) => `${s.vus} pengguna x ${s.seconds} dtk`).join(', ')}. Tekan "Setujui dan jalankan" bila sudah benar.</Note>

@@ -5,7 +5,7 @@ import { open, seal } from '../crypto.js';
 import { analyze, type Analysis, type StageRow } from './analysis.js';
 import { analyzeWithLimits as analyze_, serviceLimits } from '../playground/compose.js';
 import { architecture, type Architecture } from './roles.js';
-import { bottleneck, type BottleneckReport, type Limit, type Sample } from './bottleneck.js';
+import { bottleneck, liveUsage, type BottleneckReport, type Limit, type Sample } from './bottleneck.js';
 import * as Sampler from './sampler.js';
 import { checkTarget } from './safety.js';
 import { MAX_GEN_CPU, type CreateInput, type Criteria, type LoadRequest, type LoadStage, type StageReport } from './schema.js';
@@ -81,7 +81,8 @@ export async function get(id: number, insight = false) {
   const samples = await db().query<Sample>('SELECT ts, service, cpu, mem_mb, mem_limit_mb, cores FROM load_samples WHERE test_id=$1 ORDER BY ts', [id]);
   const limits = Object.fromEntries((t.setup?.services ?? []).filter((s) => s.limit).map((s) => [s.name, s.limit!]));
   const report: BottleneckReport = bottleneck({ stages: stages as never, analysis: base.analysis, samples, arch, limits });
-  return { ...base, architecture: arch, bottleneck: report };
+  const live = t.status === 'running' ? liveUsage(samples, t.stages, stages.length, arch, limits) : null;   // untuk diagram langsung; hanya saat berjalan
+  return { ...base, architecture: arch, bottleneck: report, live };
 }
 
 /** Beberapa uji berdampingan: ringkasan hasil dan susunan yang diuji, untuk membandingkan "sebelum dan sesudah". */

@@ -272,6 +272,17 @@ button.tpl:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; 
 .arch-node.role-db rect { fill: color-mix(in srgb, var(--ok) 14%, var(--panel)); } .arch-node.role-cache rect { fill: color-mix(in srgb, var(--warn) 14%, var(--panel)); }
 .arch-node.role-queue rect { fill: color-mix(in srgb, var(--c-in) 14%, var(--panel)); } .arch-node.role-vector rect { fill: color-mix(in srgb, var(--bad) 14%, var(--panel)); }
 .arch-node.role-search rect { fill: color-mix(in srgb, var(--muted) 14%, var(--panel)); }
+/* tampilan langsung (uji beban): garis bergerak, bilah dan angka pemakaian CPU nyata. Satu putaran putus-putus = 12 satuan, jadi geseran -12 tanpa putus. */
+.arch-edge.live { stroke-dasharray: 6 6; animation: arch-flow var(--flow-dur, 1.2s) linear infinite; }
+.arch-edge.live.cross { stroke-dasharray: 7 5; }
+.arch-edge.live.same { stroke-dasharray: 4 8; stroke-width: 2; }
+@keyframes arch-flow { to { stroke-dashoffset: -12; } }
+.arch-node rect.arch-bar-bg { fill: var(--line); stroke: none; }
+.arch-node rect.arch-bar { stroke: none; }
+.arch-node rect.arch-bar.ok, .arch-node rect.arch-bar.none { fill: var(--ok); } .arch-node rect.arch-bar.warn { fill: var(--warn); } .arch-node rect.arch-bar.bad { fill: var(--bad); }
+.arch-util { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; fill: var(--ink); }
+.arch-util.warn { fill: var(--warn); } .arch-util.bad { fill: var(--bad); }
+@media (prefers-reduced-motion: reduce) { .arch-edge.live { animation: none; } }
 .arch-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
 .arch-legend svg { vertical-align: middle; }
 .arch-swatch { display: inline-block; width: 12px; height: 12px; border: 2px solid; border-radius: 3px; vertical-align: -1px; }
