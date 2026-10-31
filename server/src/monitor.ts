@@ -51,12 +51,13 @@ export function evaluate(m: Record<string, number>, svc: Record<string, string>,
 }
 
 // satu peringatan terbuka per (server, key): dijamin indeks unik parsial, jadi aman terhadap pemeriksaan bersamaan
-export async function syncAlerts(serverId: number, conds: Array<Cond | { key: string; on: false }>, source: 'resource' | 'service' | 'agent' = 'resource'): Promise<Cond[]> {
+/** `at` = jam kejadian (ms) bila berbeda dari sekarang, mis. kejadian agen yang tertunda di spool; bawaannya sekarang. */
+export async function syncAlerts(serverId: number, conds: Array<Cond | { key: string; on: false }>, source: 'resource' | 'service' | 'agent' = 'resource', at: number = Date.now()): Promise<Cond[]> {
   const created: Cond[] = [], srv = await Servers.get(serverId), name = srv ? srv.name : String(serverId);
   for (const c of conds) {
     const open = await db().one('SELECT * FROM alerts WHERE server_id=$1 AND key=$2 AND NOT resolved', [serverId, c.key]);
     if (c.on && !open) {
-      const x = c as Cond, row = await db().one('INSERT INTO alerts(server_id,ts,level,key,title,detail,source) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING RETURNING *', [serverId, Date.now(), x.level, x.key, x.title, x.detail, source]);
+      const x = c as Cond, row = await db().one('INSERT INTO alerts(server_id,ts,level,key,title,detail,source) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING RETURNING *', [serverId, at, x.level, x.key, x.title, x.detail, source]);
       if (row) { created.push(x); Notify.alertOpened(row as never, name); }
     } else if (c.on && open) {
       const x = c as Cond; await db().exec('UPDATE alerts SET level=$1, detail=$2 WHERE id=$3', [x.level, x.detail, open.id]);

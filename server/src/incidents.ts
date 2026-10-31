@@ -26,15 +26,19 @@ export const eventSchema = z.object({
 });
 export type AgentEvent = z.infer<typeof eventSchema>;
 
+/** Waktu kejadian (ms). Agen mengirim jam kejadian aslinya (detik), jadi kejadian yang tertunda di spool saat aplikasi mati tetap tercatat pada jam sebenarnya, bukan jam tiba.
+ *  Dibatasi: tidak lebih baru dari saat diterima (jam agen maju) dan tidak lebih tua dari 30 hari (batas penyimpanan kejadian). */
+export const eventTime = (tsSec: number, receivedMs: number): number => Math.min(receivedMs, Math.max(receivedMs - 30 * 864e5, tsSec * 1000));
+
 export async function ingest(serverId: number, events: AgentEvent[]): Promise<{ accepted: number; duplicates: number }> {
   let accepted = 0, duplicates = 0;
   for (const e of events) {
     const fresh = await db().exec('INSERT INTO agent_events(id,server_id,ts,type,key,received) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING', [e.id, serverId, e.ts, e.type, e.key, Date.now()]);
     if (!fresh) { duplicates++; continue; }
     accepted++;
-    const now = Date.now(), alertKey = 'ag:' + e.key;
+    const received = Date.now(), now = eventTime(e.ts, received), alertKey = 'ag:' + e.key;   // now = jam kejadian di agen
     if (e.type === 'resolved') {
-      const inc = await db().one("UPDATE incidents SET status='resolved', resolved_at=$1, last_event=$1 WHERE server_id=$2 AND key=$3 AND status='open' RETURNING *", [now, serverId, e.key]);
+      const inc = await db().one("UPDATE incidents SET status='resolved', resolved_at=GREATEST(opened,$1), last_event=GREATEST(opened,$1) WHERE server_id=$2 AND key=$3 AND status='open' RETURNING *", [now, serverId, e.key]);
       await Monitor.syncAlerts(serverId, [{ key: alertKey, on: false }], 'agent');
       if (inc) {
         await db().exec("UPDATE recommendations SET status='superseded', summary=COALESCE(NULLIF(summary,''),'Pulih sebelum rencana disetujui') WHERE incident_id=$1 AND status='proposed'", [inc.id]);
@@ -50,13 +54,13 @@ export async function ingest(serverId: number, events: AgentEvent[]): Promise<{ 
         await Monitor.syncAlerts(serverId, [{ key: alertKey, on: true, level, title: e.title || e.key, detail: e.detail }], 'agent');   // naik: dikabari lagi; turun: diperbarui diam-diam
         if (rank(level) >= RANK.major && rank(existing.severity) < RANK.major) void generate(existing.id).catch((err) => log().warn({ err: (err as Error).message, incident: existing.id }, 'gagal menyusun rekomendasi'));
       }
-      if (e.diag?.length) await db().exec('UPDATE incidents SET last_event=$1, detail=$2, value=$3, event_count=event_count+1, diag=$4::jsonb WHERE id=$5', [now, e.detail, e.value ?? null, dg, existing.id]);
-      else await db().exec('UPDATE incidents SET last_event=$1, detail=$2, value=$3, event_count=event_count+1 WHERE id=$4', [now, e.detail, e.value ?? null, existing.id]);
+      if (e.diag?.length) await db().exec('UPDATE incidents SET last_event=GREATEST(last_event,$1), detail=$2, value=$3, event_count=event_count+1, diag=$4::jsonb WHERE id=$5', [now, e.detail, e.value ?? null, dg, existing.id]);
+      else await db().exec('UPDATE incidents SET last_event=GREATEST(last_event,$1), detail=$2, value=$3, event_count=event_count+1 WHERE id=$4', [now, e.detail, e.value ?? null, existing.id]);
       continue;
     }
     const inc = await db().one<{ id: number }>("INSERT INTO incidents(server_id,key,kind,title,severity,detail,value,opened,last_event,diag) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$8,$9::jsonb) ON CONFLICT DO NOTHING RETURNING id", [serverId, e.key, e.kind, e.title || e.key, level, e.detail, e.value ?? null, now, dg]);
     if (!inc) continue;
-    await Monitor.syncAlerts(serverId, [{ key: alertKey, on: true, level, title: e.title || e.key, detail: e.detail }], 'agent');
+    await Monitor.syncAlerts(serverId, [{ key: alertKey, on: true, level, title: e.title || e.key, detail: e.detail }], 'agent', now);
     if (rank(level) >= RANK.major) void generate(inc.id).catch((err) => log().warn({ err: (err as Error).message, incident: inc.id }, 'gagal menyusun rekomendasi'));
   }
   return { accepted, duplicates };
