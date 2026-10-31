@@ -63,6 +63,11 @@ export type RecStatus = 'proposed' | 'approved' | 'executing' | 'done' | 'failed
 export interface Incident {
   id: number; severity?: Level; title: string; detail: string; server_name: string; opened: number; resolved_at?: number | null; status: 'open' | 'resolved';
   event_count: number; rec_status: RecStatus | null; diag?: Array<{ name: string; out: string }>;
+  cause?: string; solution?: string; noted_by?: string | null; noted_at?: number | null; closed_by?: string | null; closed_reason?: string | null;
+}
+export interface SimilarIncident {
+  id: number; server_name: string; title: string; severity?: Level; opened: number; resolved_at: number | null; cause: string; solution: string; noted_by: string | null;
+  closed_by: string | null; closed_reason: string | null; score: number; worked: Array<{ title: string; command: string }>;
 }
 export type StepClass = 'read' | 'change' | 'blocked';
 export type StepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped' | 'blocked' | 'queued';
@@ -78,7 +83,7 @@ export interface PatchPlanPkg { name: string; old: string; new: string; sec: boo
 export interface PatchPlanMeta { packages: PatchPlanPkg[]; restarts: string[]; reboot: boolean; totals: { packages: number; security: number; cves: number; exploited: number; thirdParty: number } }
 export type PatchPlan = Recommendation & { kind: 'patch'; title: string; meta: PatchPlanMeta; server_name: string; server_id: number; path: ExecPath };
 export interface PatchPlanItem { id: number; server_id: number; server_name: string; title: string; status: RecStatus; created: number; updated: number; approved_by: string | null; packages: number | null; security: number | null; steps_done: number; steps_total: number; summary: string }
-export interface IncidentDetail { incident: Incident & { server_name: string }; recommendations: Recommendation[]; path: ExecPath }
+export interface IncidentDetail { incident: Incident & { server_name: string }; recommendations: Recommendation[]; similar: SimilarIncident[]; path: ExecPath }
 
 // ---------- setup oleh agen
 export type RunStatus = 'draft' | 'running' | 'waiting_approval' | 'needs_attention' | 'done' | 'failed' | 'stopped' | 'interrupted';

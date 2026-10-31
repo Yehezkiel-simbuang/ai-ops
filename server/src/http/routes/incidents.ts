@@ -13,6 +13,8 @@ export function incidentRoutes(): Router {
   r.get('/incidents', handle((req) => Incidents.listIncidents(String(req.query.status ?? 'open'))));
   r.get('/incidents/:id', handle((req) => Incidents.incidentDetail(idParam(req))));
   r.post('/incidents/:id/regenerate', handle(async (req) => ({ id: await Incidents.generate(idParam(req), { useModel: parse(regenerateBody, req.body).useModel }) })));
+  r.put('/incidents/:id/notes', handle((req) => Incidents.saveNotes(idParam(req), parse(Incidents.notesSchema, req.body), req.user!.username)));
+  r.post('/incidents/:id/close', handle((req) => Incidents.closeManually(idParam(req), parse(Incidents.closeSchema, req.body), req.user!.username)));
   r.get('/recommendations/:id', handle(async (req) => {
     const id = idParam(req), rec = await db().one('SELECT * FROM recommendations WHERE id=$1', [id]);
     if (!rec) throw new HttpError(404, 'Rekomendasi tidak ada');

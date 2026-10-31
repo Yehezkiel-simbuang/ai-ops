@@ -9,6 +9,7 @@ import { Empty, Item, List, PageHead } from '@/components/ui/Layout';
 import { IconFlame } from '@/components/icons';
 import { ago } from '@/lib/format';
 import { RecommendationView } from './RecommendationView';
+import { CloseButton, NotesPanel, Similar } from './SolutionBook';
 
 function Body({ d }: { d: IncidentDetail }) {
   const inc = d.incident, [rec, ...older] = d.recommendations;
@@ -23,7 +24,9 @@ function Body({ d }: { d: IncidentDetail }) {
           <div className="body">{inc.diag.map((x) => <div key={x.name}><div className="lbl">{x.name}</div><pre className="out">{x.out}</pre></div>)}</div>
         </details>
       )}
+      <Similar items={d.similar ?? []} />
       {rec ? <RecommendationView key={rec.id} incident={inc} rec={rec} path={d.path} /> : <Empty>Menyusun rekomendasi...</Empty>}
+      <NotesPanel key={`${inc.id}:${inc.noted_at ?? 0}`} inc={inc} />
       {older.length > 0 && (
         <details style={{ marginTop: 16 }}>
           <summary>Rekomendasi sebelumnya ({older.length})</summary>
@@ -43,6 +46,7 @@ export function IncidentDetailPage() {
     <>
       <PageHead title={inc?.title ?? 'Insiden'} icon={IconFlame}>
         {inc && <IncidentBadge status={inc.status} severity={inc.severity} />}
+        {inc && <CloseButton inc={inc} />}
         <Badge tone="acc" to="/insiden">Semua insiden</Badge>
       </PageHead>
       <Async query={query}>{(d) => <Body d={d} />}</Async>

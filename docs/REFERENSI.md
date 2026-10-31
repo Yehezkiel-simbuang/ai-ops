@@ -106,6 +106,7 @@ Server yang ditandai **playground** (formulir Server) bisa dipasangi susunan Doc
 - Alur: tulis atau pilih Compose, aplikasi menganalisisnya (opsi berbahaya diblokir), Anda menyetujui ringkasannya, server menarik image dan menjalankan susunan, menunggu semua layanan sehat (dan path kesehatan bila diisi), lalu menampilkan target uji beban. **Copot** menghapus kontainer, jaringan, volume, dan berkas proyek.
 - Syarat: server uji punya Docker dan Compose, pengguna SSH boleh memakai Docker, image ada di registry. `build` belum didukung.
 - Keamanan: hanya server yang ditandai yang bisa dipasangi; Compose disimpan terenkripsi; `privileged`, host network, bind mount ke folder host, `docker.sock`, `cap_add`, `devices`, dan port 22/2375/2376 diblokir. Pakai server uji dan data uji saja.
+- Server di-restart: perakit menambahkan `restart: unless-stopped` ke tiap layanan agar kontainer menyala lagi sendiri; Compose tanpa `restart` diberi peringatan. Saat halaman Playground dibuka, status "Berjalan" dicocokkan dengan kontainer nyata (baca-saja lewat SSH); bila semua atau sebagian mati, status menjadi Gagal dengan keterangan, dan Pasang ulang menyalakannya. Server yang tak terjangkau tidak mengubah status.
 - Uji nyata: `node scripts/e2e-playground.mjs <password-admin>` membuat server tiruan (Docker-in-Docker + sshd), memasang susunan sungguhan lewat aplikasi, memeriksa, lalu mencopot dan memastikan tidak ada yang tertinggal (20 pemeriksaan).
 
 ## Memakai AI di lab dan uji beban
@@ -210,6 +211,13 @@ Berjalan di server sendiri, hanya membaca, dan hanya melapor yang genting (jenis
 Uji nyata: `node scripts/e2e-agent.mjs` menjalankan agen Go sungguhan di kontainer Linux terhadap aplikasi Docker (25 pemeriksaan: pasang dari panduan, insiden, rekomendasi, persetujuan, eksekusi oleh agen yang benar-benar mengubah keadaan server, pulih otomatis). Butuh `ALLOWED_HOSTS` memuat `app` di `.env`.
 
 Agar agen bisa menghubungi aplikasi, setel `PUBLIC_URL` (alamat yang terjangkau dari server) dan tambahkan hostname-nya ke `ALLOWED_HOSTS`; gunakan HTTPS (profil `lan` atau `lan-internal`, atau reverse proxy HTTPS Anda sendiri dengan `TRUST_PROXY=true`). Agen menolak `http://` kecuali `insecure_http=true` (hanya uji lokal).
+
+## Buku solusi insiden (contekan masalah berulang)
+
+- Di halaman insiden, isi **Penyebab** dan **Penyelesaian** (tersimpan di tabel `incidents`, migrasi 028, dengan nama dan waktu). Bisa diisi saat insiden masih terbuka.
+- **Tutup manual** untuk insiden yang agen tak bisa mendeteksi pulihnya; alasan wajib dan dicatat bersama nama penutup. Bila kondisinya masih buruk, agen membuka insiden baru pada kejadian berikutnya.
+- Insiden baru menampilkan **Pernah terjadi sebelumnya**: insiden pulih dengan jenis (`kind`) sama, paling mirip dulu (server dan kunci sama, lalu kunci sama di server lain, lalu jenis sama), maksimal 5. Yang masuk hanya yang punya catatan atau yang rekomendasinya berhasil membuat insiden pulih; langkah ubah yang dulu selesai ikut ditampilkan sebagai "perbaikan yang dulu berhasil".
+- Kemiripan sengaja sederhana (jenis dan kunci), bukan tebakan model, agar bisa dijelaskan dan diuji.
 
 ## Pengembangan dan tes
 

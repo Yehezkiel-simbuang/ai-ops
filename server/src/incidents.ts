@@ -199,13 +199,46 @@ export async function listIncidents(status?: string) {
     FROM incidents i JOIN servers s ON s.id=i.server_id ${where} ORDER BY i.status, CASE i.severity WHEN 'critical' THEN 0 WHEN 'major' THEN 1 WHEN 'minor' THEN 2 ELSE 3 END, i.opened DESC LIMIT 100`, where ? [status] : []);
   return rows;
 }
+// ---------- buku solusi: catatan penyebab/penyelesaian, tutup manual, dan insiden serupa
+export const notesSchema = z.object({ cause: z.string().trim().max(2000).default(''), solution: z.string().trim().max(4000).default('') });
+export const closeSchema = z.object({ reason: z.string().trim().min(3, 'Isi alasan penutupan (minimal 3 huruf)').max(500) });
+
+export async function saveNotes(id: number, b: z.infer<typeof notesSchema>, actor: string) {
+  const inc = await db().one('UPDATE incidents SET cause=$2, solution=$3, noted_by=$4, noted_at=$5 WHERE id=$1 RETURNING title', [id, b.cause, b.solution, actor, Date.now()]);
+  if (!inc) throw new HttpError(404, 'Insiden tidak ada'); await audit(actor, 'insiden.catatan', String(inc.title)); return incidentDetail(id);
+}
+
+/** Untuk insiden yang agen tak bisa mendeteksi pulihnya. Bila kondisinya masih buruk, agen akan membuka insiden baru pada kejadian berikutnya. */
+export async function closeManually(id: number, b: z.infer<typeof closeSchema>, actor: string) {
+  const now = Date.now(), inc = await db().one("UPDATE incidents SET status='resolved', resolved_at=GREATEST(opened,$2), closed_by=$3, closed_reason=$4 WHERE id=$1 AND status='open' RETURNING *", [id, now, actor, b.reason]);
+  if (!inc) throw bad('Insiden tidak ada atau sudah pulih');
+  await Monitor.syncAlerts(inc.server_id, [{ key: 'ag:' + inc.key, on: false }], 'agent');
+  await db().exec("UPDATE recommendations SET status='superseded', summary=COALESCE(NULLIF(summary,''),'Ditutup manual') WHERE incident_id=$1 AND status='proposed'", [id]);
+  await audit(actor, 'insiden.tutup', `${inc.title}: ${b.reason}`); return incidentDetail(id);
+}
+
+/** Insiden lampau yang mirip (jenis sama; paling mirip bila kunci dan server sama), beserta catatan dan perbaikan yang dulu berhasil. */
+async function similar(inc: Record<string, any>) {
+  const rows = await db().query(`SELECT i.id, i.server_id, s.name AS server_name, i.key, i.title, i.severity, i.opened, i.resolved_at, i.cause, i.solution, i.noted_by, i.closed_by, i.closed_reason,
+      (CASE WHEN i.key=$3 AND i.server_id=$2 THEN 3 WHEN i.key=$3 THEN 2 ELSE 1 END) AS score
+    FROM incidents i JOIN servers s ON s.id=i.server_id
+    WHERE i.status='resolved' AND i.id<>$1 AND i.kind=$4 AND (i.cause<>'' OR i.solution<>'' OR EXISTS (SELECT 1 FROM recommendations r WHERE r.incident_id=i.id AND r.resolved_after))
+    ORDER BY score DESC, (i.cause<>'' OR i.solution<>'') DESC, i.resolved_at DESC LIMIT 5`, [inc.id, inc.server_id, inc.key, inc.kind]);
+  const out = [];
+  for (const r of rows) {
+    const steps = await db().query(`SELECT st.title, st.command FROM rec_steps st JOIN recommendations rc ON rc.id=st.rec_id WHERE rc.incident_id=$1 AND rc.resolved_after AND st.class='change' AND st.status='done' ORDER BY rc.id DESC, st.n LIMIT 8`, [r.id]);
+    out.push({ ...r, score: Number(r.score), worked: steps });
+  }
+  return out;
+}
+
 export async function incidentDetail(id: number) {
   const inc = await db().one('SELECT i.*, s.name AS server_name FROM incidents i JOIN servers s ON s.id=i.server_id WHERE i.id=$1', [id]); if (!inc) throw new HttpError(404, 'Insiden tidak ada');
   const recs = await db().query('SELECT * FROM recommendations WHERE incident_id=$1 ORDER BY id DESC LIMIT 5', [id]);
   const out = [];
   for (const r of recs) out.push({ ...r, steps: await db().query('SELECT * FROM rec_steps WHERE rec_id=$1 ORDER BY n', [r.id]) });
   const server = await Servers.get(inc.server_id), agent = await Agents.statusOf(inc.server_id);
-  return { incident: inc, recommendations: out, path: server ? execPath(server, agent) : 'none' };
+  return { incident: inc, recommendations: out, similar: await similar(inc), path: server ? execPath(server, agent) : 'none' };
 }
 
 // ---------- jalur eksekusi
