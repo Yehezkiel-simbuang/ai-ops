@@ -21,10 +21,14 @@ export function securityHeaders(cfg: Config): RequestHandler {
   });
 }
 
+/** Rute mesin-ke-mesin yang dijaga rahasia bearer (bukan cookie sesi): runner uji beban memanggil lewat nama layanan Docker (mis. app:4317) yang tidak mungkin ada di ALLOWED_HOSTS.
+ *  Penjaga Host melindungi sesi browser dari DNS rebinding; rute ini tidak memakai sesi, jadi tidak terkait. */
+const MACHINE_PREFIX = '/loadgen/v1/';
+
 /** Tolak Host yang tidak ada di ALLOWED_HOSTS. */
 export function hostGuard(cfg: Config): RequestHandler {
   return (req, res, next) => {
-    if (OPEN_PATHS.has(req.path)) return next();
+    if (OPEN_PATHS.has(req.path) || req.path.startsWith(MACHINE_PREFIX)) return next();
     if (!cfg.allowedHosts.includes(req.hostname.toLowerCase())) { res.status(403).json({ error: 'Host ditolak' }); return; }
     next();
   };

@@ -105,9 +105,12 @@ export async function remove(id: number): Promise<void> {
 export async function duplicate(id: number, user: string) {
   const t = await db().one<TestRow>('SELECT * FROM load_tests WHERE id=$1', [id]);
   if (!t) throw new HttpError(404, 'Uji beban tidak ada');
+  // Salinan tetap terhubung ke susunan Playground: diagram langsung, sampel CPU kontainer, putar ulang, dan analisis bottleneck bergantung padanya.
+  // Ringkasan susunan diambil ulang bila susunannya masih ada (bisa sudah diubah); bila sudah dihapus, ringkasan lama dipertahankan tanpa tautan.
+  const fresh = t.playground_id ? await setupOf(t.playground_id) : null, setup = fresh ?? t.setup ?? null, pgId = fresh ? t.playground_id : null;
   const row = await db().one<TestRow>(
-    'INSERT INTO load_tests(name,target,allow_public,scenario,headers_enc,stages,criteria,scrape,created) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
-    [`${t.name} (ulang)`.slice(0, 80), t.target, t.allow_public, JSON.stringify(t.scenario), t.headers_enc, JSON.stringify(t.stages), JSON.stringify(t.criteria), JSON.stringify(t.scrape), Date.now()]
+    'INSERT INTO load_tests(name,target,allow_public,scenario,headers_enc,stages,criteria,scrape,created,setup,playground_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
+    [`${t.name} (ulang)`.slice(0, 80), t.target, t.allow_public, JSON.stringify(t.scenario), t.headers_enc, JSON.stringify(t.stages), JSON.stringify(t.criteria), JSON.stringify(t.scrape), Date.now(), setup ? JSON.stringify(setup) : null, pgId]
   );
   await audit(user, 'loadtest.salin', t.name);
   return view(row!);
