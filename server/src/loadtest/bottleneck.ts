@@ -59,6 +59,21 @@ export function liveUsage(samples: Sample[], plan: Array<{ vus: number }>, done:
   };
 }
 
+/** Rangkaian keadaan langsung dari semua sampel tersimpan, untuk memutar ulang uji yang sudah selesai. Tiap bingkai = satu waktu sampel; tahapnya diambil dari
+ *  jendela waktu tahap (sampel di sela tahap atau sebelum tahap pertama dihitung ke tahap berikutnya, sesudah tahap terakhir ke tahap terakhir). Dijarangkan merata bila lebih dari `max`. */
+export function replayFrames(samples: Sample[], stages: Array<{ started: number; ended: number }>, plan: Array<{ vus: number }>, arch: Architecture | null, limits: Record<string, Limit>, max = 240): Live[] {
+  if (!samples.length || !plan.length) return [];
+  const byTs = new Map<number, Sample[]>();
+  for (const s of samples) { const g = byTs.get(s.ts); if (g) g.push(s); else byTs.set(s.ts, [s]); }
+  let times = [...byTs.keys()].sort((a, b) => a - b);
+  if (times.length > max) times = Array.from({ length: max }, (_, i) => times[Math.round((i * (times.length - 1)) / (max - 1))]!);
+  const stageAt = (ts: number): number => {
+    const inside = stages.findIndex((st) => ts >= st.started && ts <= st.ended); if (inside >= 0) return inside;
+    const next = stages.findIndex((st) => st.started > ts); return next >= 0 ? next : Math.max(0, stages.length - 1);
+  };
+  return times.map((ts) => liveUsage(byTs.get(ts)!, plan, stageAt(ts), arch, limits)!);
+}
+
 const ADVICE: Record<Role, { cpu: string[]; mem: string[] }> = {
   db: { cpu: ['Periksa query lambat (slow query log, EXPLAIN) dan tambahkan index yang hilang.', 'Naikkan CPU database atau pisahkan ke server sendiri.', 'Bila bebannya banyak baca, tambah replika baca atau cache hasil query.'], mem: ['Naikkan memori database dan periksa buffer pool atau shared_buffers.', 'Kurangi ukuran data yang sering dibaca atau tambahkan cache di depannya.'] },
   app: { cpu: ['Tambah replika aplikasi di belakang load balancer (sebaiknya di server berbeda).', 'Profil kode pada jalur request tersering; kerjaan berat dipindah ke antrean.', 'Naikkan jumlah worker atau batas CPU kontainer.'], mem: ['Periksa kebocoran memori dan ukuran objek per request.', 'Naikkan batas memori atau kurangi worker per kontainer.'] },

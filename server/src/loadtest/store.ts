@@ -5,7 +5,7 @@ import { open, seal } from '../crypto.js';
 import { analyze, type Analysis, type StageRow } from './analysis.js';
 import { analyzeWithLimits as analyze_, serviceLimits } from '../playground/compose.js';
 import { architecture, type Architecture } from './roles.js';
-import { bottleneck, liveUsage, type BottleneckReport, type Limit, type Sample } from './bottleneck.js';
+import { bottleneck, liveUsage, replayFrames, type BottleneckReport, type Limit, type Sample } from './bottleneck.js';
 import * as Sampler from './sampler.js';
 import { checkTarget } from './safety.js';
 import { MAX_GEN_CPU, type CreateInput, type Criteria, type LoadRequest, type LoadStage, type StageReport } from './schema.js';
@@ -82,7 +82,9 @@ export async function get(id: number, insight = false) {
   const limits = Object.fromEntries((t.setup?.services ?? []).filter((s) => s.limit).map((s) => [s.name, s.limit!]));
   const report: BottleneckReport = bottleneck({ stages: stages as never, analysis: base.analysis, samples, arch, limits });
   const live = t.status === 'running' ? liveUsage(samples, t.stages, stages.length, arch, limits) : null;   // untuk diagram langsung; hanya saat berjalan
-  return { ...base, architecture: arch, bottleneck: report, live };
+  const finished = ['done', 'failed', 'cancelled'].includes(t.status);
+  const replay = finished ? replayFrames(samples, stages as never, t.stages, arch, limits) : null;   // untuk memutar ulang aliran data setelah uji selesai
+  return { ...base, architecture: arch, bottleneck: report, live, replay };
 }
 
 /** Beberapa uji berdampingan: ringkasan hasil dan susunan yang diuji, untuk membandingkan "sebelum dan sesudah". */

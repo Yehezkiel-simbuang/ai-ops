@@ -1,9 +1,9 @@
-import { screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { mockApi, renderWithProviders } from '@/test/utils';
 import { ArchitectureDiagram, ArchitectureView } from './ArchitectureView';
-import { LiveFlow } from './LiveFlow';
+import { LiveFlow, LiveReplay } from './LiveFlow';
 import { BottleneckPanel } from './BottleneckPanel';
 import { finished, running } from './fixtures';
 import { LoadTestDetailPage } from './LoadTestDetailPage';
@@ -155,6 +155,48 @@ describe('diagram langsung selama uji berjalan', () => {
     second.unmount(); vi.unstubAllGlobals();
     mockApi({ 'GET /api/loadtests/5': { body: { ...finished(), architecture: arch(), live: null } } });
     page(); await screen.findByRole('heading', { name: 'Arsitektur dan penempatan komponen' }); expect(screen.queryByRole('heading', { name: 'Aliran data langsung' })).not.toBeInTheDocument();
+  });
+});
+
+describe('putar ulang uji yang sudah selesai', () => {
+  const T0 = 1_800_000_000_000;
+  const frame = (sec: number, stageIdx: number, vus: number, cpu: number): Live => ({
+    at: T0 + sec * 1000, stageIdx, vus, maxVus: 80, host: null,
+    services: [{ service: 'db', role: 'db', cpuCores: cpu * 2, cpu, memMb: 500, mem: 0.1 }]
+  });
+  const frames = [frame(0, 0, 5, 0.2), frame(30, 1, 20, 0.6), frame(60, 2, 80, 0.95)];
+
+  it('mulai otomatis, bisa dijeda, digeser ke bingkai mana pun, dan diulang dari awal; diagram mengikuti bingkai', async () => {
+    renderWithProviders(<LiveReplay arch={arch()} frames={frames} />);
+    const svg = screen.getByRole('img', { name: 'Putar ulang aliran data' });
+    expect(screen.getByRole('status')).toHaveTextContent('Tahap 1: 5 pengguna virtual | detik 0 dari 60'); expect(within(svg).getByText('20%')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Jeda' })); expect(screen.getByRole('button', { name: 'Putar' })).toBeInTheDocument();   // jeda: tombol berganti
+    fireEvent.change(screen.getByRole('slider', { name: 'Waktu uji' }), { target: { value: '2' } });
+    expect(screen.getByRole('status')).toHaveTextContent('Tahap 3: 80 pengguna virtual | detik 60 dari 60'); expect(within(svg).getByText('95%')).toHaveClass('bad'); expect(screen.getByText('3/3')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('slider', { name: 'Waktu uji' }), { target: { value: '1' } }); expect(screen.getByRole('status')).toHaveTextContent('Tahap 2: 20 pengguna virtual | detik 30 dari 60');
+    await userEvent.click(screen.getByRole('button', { name: 'Ulang dari awal' })); expect(screen.getByRole('status')).toHaveTextContent('detik 0 dari 60');
+    expect(screen.getByRole('combobox', { name: 'Kecepatan' })).toBeInTheDocument();
+  });
+
+  it('berjalan sendiri dari bingkai ke bingkai sampai habis, lalu berhenti', async () => {
+    vi.useFakeTimers();
+    try {
+      renderWithProviders(<LiveReplay arch={arch()} frames={frames} />);
+      expect(screen.getByRole('status')).toHaveTextContent('detik 0');
+      await act(async () => { await vi.advanceTimersByTimeAsync(260); }); expect(screen.getByRole('status')).toHaveTextContent('detik 30');   // kecepatan awal 2x = 250 ms per bingkai
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000); }); expect(screen.getByRole('status')).toHaveTextContent('detik 60'); expect(screen.getByRole('button', { name: 'Putar' })).toBeInTheDocument();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('halaman uji selesai: bagian muncul bila ada susunan dan lebih dari satu bingkai; tidak untuk uji tanpa sampel atau satu bingkai', async () => {
+    const page = () => renderWithProviders(<Routes><Route path="/uji-beban/:id" element={<LoadTestDetailPage />} /></Routes>, { route: '/uji-beban/5' });
+    mockApi({ 'GET /api/loadtests/5': { body: { ...finished(), bottleneck: report(), architecture: arch(), replay: frames } } });
+    const a = page(); expect(await screen.findByRole('heading', { name: 'Putar ulang aliran data' })).toBeInTheDocument(); expect(screen.getByRole('heading', { name: 'Arsitektur dan penempatan komponen' })).toBeInTheDocument();
+    a.unmount(); vi.unstubAllGlobals();
+    for (const replay of [[], [frames[0]], null]) {
+      mockApi({ 'GET /api/loadtests/5': { body: { ...finished(), bottleneck: report(), architecture: arch(), replay } } });
+      const b = page(); await screen.findByRole('heading', { name: 'Arsitektur dan penempatan komponen' }); expect(screen.queryByRole('heading', { name: 'Putar ulang aliran data' })).not.toBeInTheDocument(); b.unmount(); vi.unstubAllGlobals();
+    }
   });
 });
 
