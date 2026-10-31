@@ -39,7 +39,7 @@ export async function login(cfg: Config, username: string, password: string, ip:
 
 export async function authenticate(cfg: Config, token: string | undefined): Promise<SessionUser | null> {
   if (!token || token.length > 200) return null;
-  const now = Date.now(), r = await db().one('SELECT s.id AS sid, s.last_seen, u.id, u.username, u.must_change FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND s.expires_at>$2', [sha256(token), now]);
+  const now = Date.now(), r = await db().one('SELECT s.id AS sid, s.last_seen, s.created_at, u.id, u.username, u.must_change FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND s.expires_at>$2 AND s.created_at>$3', [sha256(token), now, now - cfg.SESSION_MAX_DAYS * 864e5]);   // umur mutlak: cookie curian tidak hidup selamanya meski terus dipakai
   if (!r) return null;
   if (now - r.last_seen > 5 * 60_000) await db().exec('UPDATE sessions SET last_seen=$1, expires_at=$2 WHERE id=$3', [now, now + cfg.SESSION_TTL_HOURS * 3600e3, r.sid]);   // sesi bergeser, tulis maksimal tiap 5 menit
   return { id: r.id, username: r.username, mustChange: !!r.must_change };

@@ -12,7 +12,14 @@ export function binaryInfo(binDir: string): Record<string, string> {
   return out;
 }
 
-const UNIT = '[Unit]\nDescription=AI Ops agent\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nExecStart=/usr/local/bin/aiops-agent -config /etc/aiops-agent.json\nRestart=always\nRestartSec=5\nStateDirectory=aiops-agent\n\n[Install]\nWantedBy=multi-user.target';
+/** Unit systemd agen. Agen berjalan sebagai root. Pengerasan dibagi dua: set dasar aman untuk keduanya, dan set ketat HANYA bila eksekusi perintah mati (hanya memantau).
+ *  Dengan eksekusi menyala, perintah perbaikan yang disetujui perlu menulis ke /etc, memasang paket, dan memakai sudo, jadi NoNewPrivileges dan ProtectSystem tidak dipasang. */
+const COMMON_HARDENING = ['LockPersonality=yes', 'RestrictRealtime=yes', 'RestrictSUIDSGID=yes', 'ProtectKernelModules=yes', 'ProtectControlGroups=yes'];
+const MONITOR_ONLY_HARDENING = ['NoNewPrivileges=yes', 'PrivateTmp=yes', 'ProtectSystem=full', 'ProtectHome=read-only'];
+export function unitText(exec: boolean): string {
+  return ['[Unit]', 'Description=AI Ops agent', 'After=network-online.target', 'Wants=network-online.target', '', '[Service]', 'ExecStart=/usr/local/bin/aiops-agent -config /etc/aiops-agent.json', 'Restart=always', 'RestartSec=5', 'StateDirectory=aiops-agent',
+    ...COMMON_HARDENING, ...(exec ? [] : MONITOR_ONLY_HARDENING), '', '[Install]', 'WantedBy=multi-user.target'].join('\n');
+}
 
 /** Peringatan yang perlu dibaca sebelum menjalankan skrip: alamat yang tidak bisa dijangkau server lain, dan http tanpa enkripsi. */
 export function guideWarnings(publicUrl: string): string[] {
@@ -41,7 +48,7 @@ export function installGuide(publicUrl: string, cred: { keyId: string; secret: s
     "install -m 600 /dev/null /etc/aiops-agent.json && cat > /etc/aiops-agent.json <<'JSON'", configText, 'JSON',
     '',
     '# 3) Layanan systemd',
-    "cat > /etc/systemd/system/aiops-agent.service <<'UNIT'", UNIT, 'UNIT',
+    "cat > /etc/systemd/system/aiops-agent.service <<'UNIT'", unitText(opt.exec), 'UNIT',
     'systemctl daemon-reload && systemctl enable --now aiops-agent',
     '',
     '# 4) Cek: agen mencetak hasil pemeriksaan tanpa mengirim apa pun',

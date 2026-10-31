@@ -22,7 +22,7 @@ export function loadgenApi(cfg: Config): Router {
     if (now - lastSeenWrite > 5000) { lastSeenWrite = now; void metaSet('loadgen_seen', String(now)).catch(() => undefined); }   // runner yang sedang menjalankan uji juga tetap terlihat online
     next();
   };
-  r.use(limiter({ max: 600 }), auth, express.json({ limit: '256kb' }));
+  r.use(limiter({ max: 600 }), auth, express.json({ limit: '256kb', inflate: false }));
 
   /** Ambil uji berikutnya yang sudah disetujui. Long-poll maksimal 25 detik; balasan { job: null } bila tidak ada. */
   r.post('/next', handle(async (req, res) => {

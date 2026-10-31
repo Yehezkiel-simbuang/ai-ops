@@ -38,7 +38,7 @@ export function createApp({ cfg, db, log }: AppDeps): Express {
   app.use(hostGuard(cfg));
   app.use('/agent', agentApi(binDir));        // sebelum parser JSON global: butuh badan mentah
   app.use('/loadgen/v1', loadgenApi(cfg));    // runner pembangkit beban: bearer rahasia, parser JSON sendiri
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '1mb', inflate: false }));   // badan terkompresi ditolak (415): tidak ada klien sah yang memakainya, dan jalur dekompresi pernah punya celah DoS (body-parser)
   app.use(httpMetrics(metrics));
   app.use(metricsRoutes(cfg, metrics));
   app.use('/api', apiRoutes(cfg, binDir));

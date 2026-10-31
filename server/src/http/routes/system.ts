@@ -12,7 +12,8 @@ import { handle } from '../handle.js';
 export function healthRoutes(db: Db): Router {
   const r = Router();
   r.get('/healthz', (_req, res) => { res.json({ ok: true }); });
-  r.get('/readyz', handle(async (_req, res) => { const ok = await db.ping(); res.status(ok ? 200 : 503).json({ ok, db: db.stats() }); }));
+  // tanpa statistik pool: endpoint ini tanpa autentikasi
+  r.get('/readyz', handle(async (_req, res) => { const ok = await db.ping(); res.status(ok ? 200 : 503).json({ ok }); }));
   return r;
 }
 

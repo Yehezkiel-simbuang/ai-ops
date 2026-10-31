@@ -7,7 +7,8 @@ const SKIP = new Set(['node_modules', 'vendor', '.git', 'storage', 'bootstrap', 
   'graphify-out', '.agents', '.claude', '.opencode', '.github', 'docs', 'migrations', 'Migrations', 'test', 'tests', '__tests__', 'spec', 'e2e', 'fixtures']);
 const MAX_FILE = 400000;
 
-function read(p) { try { const s = fs.statSync(p); if (!s.isFile() || s.size > MAX_FILE) return ''; return fs.readFileSync(p, 'utf8'); } catch (e) { return ''; } }
+// lstat: symlink bukan berkas biasa dan tidak diikuti (repo berbahaya bisa menautkan ke rahasia di luar proyek)
+function read(p) { try { const s = fs.lstatSync(p); if (!s.isFile() || s.size > MAX_FILE) return ''; return fs.readFileSync(p, 'utf8'); } catch (e) { return ''; } }
 function exists(p) { try { fs.accessSync(p); return true; } catch (e) { return false; } }
 function readJson(p) { try { return JSON.parse(read(p)); } catch (e) { return null; } }
 function rel(root, p) { return path.relative(root, p).split(path.sep).join('/'); }
@@ -20,6 +21,7 @@ function walk(dir, exts, opt) {
     let list = []; try { list = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; }
     for (const e of list) {
       if (out.length >= max) return;
+      if (e.isSymbolicLink()) continue;   // tidak mengikuti symlink
       if (e.isDirectory()) { if (!SKIP.has(e.name) || (keepTests && /^(test|tests|spec)$/.test(e.name) && false)) go(path.join(d, e.name), depth + 1); }
       else if (exts.some(function (x) { return e.name.endsWith(x); }) && !/\.min\.(js|css)$/.test(e.name)) out.push(path.join(d, e.name));
     }

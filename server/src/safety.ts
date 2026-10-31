@@ -3,6 +3,8 @@
 //   change  : mengubah sesuatu atau tidak dikenal; WAJIB disetujui pengguna di UI
 //   blocked : jelas merusak; tidak pernah dijalankan oleh agen (jalankan manual bila memang perlu)
 // Prinsip: tidak dikenal = change. Tanda berbahaya apa pun pada satu segmen menaikkan seluruh perintah.
+import { awkSafe, curlSafe, dateSafe, dmesgSafe, hostnameSafe, hostnamectlSafe, networkWithExpansion, readsSensitive, sedSafe, sortSafe, sqlHasSideEffect, uniqSafe } from './safety-rules.js';
+
 export type CommandClass = 'read' | 'change' | 'blocked';
 export interface Classification { cls: CommandClass; why: string }
 
@@ -44,12 +46,13 @@ const READ_SUB: Record<string, SubCheck> = {
   php: (a) => a.every((x) => /^-(v|m|i|-ini|--version)$/.test(x)),
   'php-fpm': (a) => a.every((x) => /^-(t|tt|v|i|m)$/.test(x)),
   mount: (a) => a.length === 0 || a.every((x) => (x[0] === '-' && !/[a-zA-Z]*[aot]/.test(x.slice(1))) || x === '-l'),
-  find: (a) => !has(a, (x) => /^-(exec|execdir|delete|ok|okdir|fprint|fprintf|fls)$/.test(x)),
-  sed: (a) => !has(a, (x) => /^-[a-zA-Z]*i/.test(x) || x === '--in-place'),
-  awk: (a) => !has(a, (x) => /system\s*\(|\|\s*getline|>\s*["']?\/|print\s*>/.test(x)),
+  find: (a) => !has(a, (x) => /^-(exec|execdir|delete|ok|okdir|fprint0?|fprintf|fls)$/.test(x)),
+  sed: sedSafe,   // hanya skrip dari perintah yang dikenal aman (tanpa e/w/r, tanpa -i/-f); lihat safety-rules.ts
+  awk: awkSafe,   // tanpa system(), getline, -f/-i, dan print yang diarahkan ke berkas atau pipa
+  sort: sortSafe, uniq: uniqSafe, date: dateSafe, hostname: hostnameSafe, hostnamectl: hostnamectlSafe, dmesg: dmesgSafe,   // mode menulis berkas atau mengubah sistem dikeluarkan dari "baca"
   tee: (a) => a.length > 0 && a.every((x) => x === '/dev/null'),
   xargs: () => false, timeout: () => true, time: () => true, nice: () => true, ionice: () => true, command: (a) => /^-[vV]$/.test(a[0] || ''),
-  curl: (a) => { const t = a.join(' '); return /(^|\s)(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])([:/\s]|$)/.test(t) && !/(^|\s)(-X|--request|-d|--data\S*|-F|--form|-T|--upload-file|-o\s+(?!\/dev\/null)\S+|--output\s+(?!\/dev\/null)\S+|-O)(\s|$)/.test(t); },
+  curl: (a) => { const t = a.join(' '); return curlSafe(a) && /(^|\s)(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])([:/\s]|$)/.test(t); },   // opsi harus dikenal aman (tanpa tulis berkas atau kirim data) dan target lokal
   ping: (a) => has(a, (x) => x === '-c'),
   top: (a) => a.includes('-b') || has(a, (x) => /^-[a-zA-Z]*b/.test(x)), htop: () => false, less: () => false, more: () => false,
   env: (a) => a.length === 0, printenv: () => true,
@@ -85,7 +88,7 @@ function hasWriteRedirect(seg: string): boolean { const stripped = seg.replace(/
 // SQL: hanya SELECT/SHOW/EXPLAIN/DESCRIBE/USE
 export function sqlIsRead(text: string): boolean {
   const t = String(text).replace(/\/\*[\s\S]*?\*\/|--[^\n]*/g, ' ').trim(); if (!t) return false;
-  return t.split(';').map((s) => s.trim()).filter(Boolean).every((s) => /^(select|show|explain|describe|desc|use)\b/i.test(s) && !/\b(into\s+(outfile|dumpfile)|for\s+update|lock\s+in\s+share|sleep\s*\(|benchmark\s*\()/i.test(s));
+  return t.split(';').map((s) => s.trim()).filter(Boolean).every((s) => /^(select|show|explain|describe|desc|use)\b/i.test(s) && !/\b(into\s+(outfile|dumpfile)|for\s+update|lock\s+in\s+share|sleep\s*\(|benchmark\s*\()/i.test(s) && !sqlHasSideEffect(s));
 }
 function sqlOfArgs(a: string[]): string | null {
   const i = a.findIndex((x) => x === '-e' || x === '--execute' || /^--execute=/.test(x) || /^-e./.test(x)); if (i < 0) return null;
@@ -99,6 +102,7 @@ function classifySegment(seg: string): CommandClass {
   if (w[0] === 'sudo') { w.shift(); while (w[0] && /^-(n|E|H|S)$/.test(w[0])) w.shift(); if (/^-[ugCrtph]$|^--/.test(w[0] || '')) return 'change'; }
   const cmd = (w[0] || '').replace(/^.*\//, ''), args = w.slice(1);
   if (!READ_CMDS.has(cmd)) return 'change';
+  if (readsSensitive(cmd, args)) return 'change';   // berkas rahasia (kunci privat, shadow, .env, /run/secrets) butuh persetujuan: isinya akan masuk ke keluaran dan prompt model
   if (['timeout', 'time', 'nice', 'ionice'].includes(cmd)) { const rest = args.filter((x) => !(x[0] === '-' || /^\d+[smhd]?$/.test(x))); return rest.length ? classifySegment(rest.join(' ')) : 'read'; }
   if (cmd === 'mysql' || cmd === 'mariadb') { const s = sqlOfArgs(args); return s != null && sqlIsRead(s) ? 'read' : 'change'; }
   if (cmd === 'mysqladmin') return args.some((x) => /^(status|ping|processlist|extended-status|variables|version)$/.test(x)) && !args.some((x) => /^(shutdown|kill|flush|drop|create|reload|refresh|stop-slave|start-slave)/.test(x)) ? 'read' : 'change';
@@ -118,6 +122,7 @@ export function classify(command: string): Classification {
   if (cmd.length > 4000) return { cls: 'blocked', why: 'Perintah terlalu panjang' };
   for (const [re, why] of BLOCKED) if (re.test(cmd)) return { cls: 'blocked', why: 'Diblokir kebijakan: ' + why };
   if (/<<-?\s*['"]?\w+/.test(cmd)) return { cls: 'change', why: 'Memakai heredoc' };
+  if (splitSegments(cmd).some(networkWithExpansion)) return { cls: 'change', why: 'Alat jaringan dengan substitusi atau variabel (bisa membocorkan data lewat nama host)' };
   const inner: string[] = []; let rest = cmd, prev: string;
   do { prev = rest; rest = rest.replace(/\$\(([^()]*)\)/g, (_m, g: string) => { inner.push(g); return ' x '; }).replace(/`([^`]*)`/g, (_m, g: string) => { inner.push(g); return ' x '; }); } while (rest !== prev);
   const parts = splitSegments(rest); for (const g of inner) for (const p of splitSegments(g)) parts.push(p);

@@ -53,7 +53,7 @@ const authenticateAgent: express.RequestHandler = async (req, res, next) => {
 function v1Routes(): Router {
   const r = Router();
   r.use(agentLimiter());
-  r.use(express.json({ limit: '256kb', verify: (req, _res, buf) => { (req as express.Request).rawBody = buf; } }));
+  r.use(express.json({ limit: '256kb', inflate: false, verify: (req, _res, buf) => { (req as express.Request).rawBody = buf; } }));
   r.use(authenticateAgent);
 
   r.post('/heartbeat', handle(async (req) => {

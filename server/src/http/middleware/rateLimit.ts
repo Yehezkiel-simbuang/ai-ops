@@ -21,4 +21,8 @@ export const globalLimiter = (): RequestHandler => limiter({ max: 600, skipOpenP
 export const loginLimiter = (): RequestHandler => limiter({ max: 8 });
 export const sensitiveLimiter = (): RequestHandler => limiter({ max: 10 });
 /** API agen: per kunci agen, bukan per IP. */
-export const agentLimiter = (): RequestHandler => limiter({ max: 120, key: (req) => String(req.headers['x-aiops-key'] ?? ipKeyGenerator(req.ip ?? '')) });
+export const agentLimiter = (): RequestHandler => {
+  // header x-aiops-key buatan klien: kunci per-agen saja bisa dilewati dengan mengganti nilainya, jadi ada juga batas per IP (lebih longgar karena banyak agen bisa di balik satu NAT)
+  const byIp = limiter({ max: 600 }), byKey = limiter({ max: 120, key: (req) => String(req.headers['x-aiops-key'] ?? ipKeyGenerator(req.ip ?? '')) });
+  return (req, res, next) => byIp(req, res, (err?: unknown) => (err ? next(err) : byKey(req, res, next)));
+};

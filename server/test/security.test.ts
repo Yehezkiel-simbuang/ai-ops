@@ -58,7 +58,7 @@ describe('akses HTTP', () => {
   it('UI juga menolak Host asing', async () => { expect((await h.app.inject({ method: 'GET', url: '/', headers: { host: 'evil.example' } })).statusCode).toBe(403); });
   it('health tersedia tanpa login, readiness memeriksa database', async () => {
     expect((await h.call('GET', '/healthz', undefined, { cookie: null })).status).toBe(200);
-    const r = await h.call('GET', '/readyz', undefined, { cookie: null }); expect(r.status).toBe(200); expect(r.json.db.max).toBeGreaterThan(0);
+    const r = await h.call('GET', '/readyz', undefined, { cookie: null }); expect(r.status).toBe(200); expect(r.json).toEqual({ ok: true });   // tanpa statistik pool: endpoint tanpa autentikasi tidak membocorkan keadaan internal
   });
   it('/metrics mati tanpa METRICS_TOKEN', async () => { expect((await h.call('GET', '/metrics', undefined, { cookie: null })).status).toBe(404); });
   it('header keamanan terpasang (CSP, nosniff, frame)', async () => {

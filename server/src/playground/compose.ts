@@ -16,6 +16,7 @@ export interface ComposeAnalysis {
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 const BLOCKED_PORTS = new Set([22, 2375, 2376]);
+const KNOWN_REGISTRIES = new Set(['docker.io', 'index.docker.io', 'ghcr.io', 'quay.io', 'gcr.io', 'registry.k8s.io', 'mcr.microsoft.com', 'public.ecr.aws', 'lscr.io', 'registry.gitlab.com', 'docker.elastic.co']);
 
 /** "8080:80", "127.0.0.1:8080:80/tcp", "80", atau bentuk panjang {target, published}. */
 function parsePort(p: unknown): { host: number | null; container: number } | null {
@@ -40,7 +41,8 @@ export function analyze(text: string): ComposeAnalysis {
   if (!text.trim()) { out.problems.push('Isi Compose kosong'); return out; }
   if (text.length > MAX_COMPOSE_CHARS) { out.problems.push(`Compose terlalu panjang (maks. ${MAX_COMPOSE_CHARS} karakter)`); return out; }
   let doc: unknown;
-  try { doc = parse(text); } catch (e) { out.problems.push(`YAML tidak valid: ${(e as Error).message.split('\n')[0]}`); return out; }
+  try { doc = parse(text, { merge: true }); }   // kunci merge (<<) diperluas seperti yang dilakukan Docker Compose; tanpa ini privileged dll bisa disembunyikan di balik anchor
+   catch (e) { out.problems.push(`YAML tidak valid: ${(e as Error).message.split('\n')[0]}`); return out; }
   if (!isObj(doc) || !isObj(doc.services) || !Object.keys(doc.services).length) { out.problems.push('Compose harus punya bagian "services" berisi minimal satu layanan'); return out; }
   const names = Object.keys(doc.services);
   if (names.length > MAX_SERVICES) out.problems.push(`Terlalu banyak layanan (maks. ${MAX_SERVICES})`);
@@ -51,12 +53,16 @@ export function analyze(text: string): ComposeAnalysis {
     if (s.build !== undefined) out.problems.push(`${at}: "build" tidak didukung karena kode sumber tidak ada di server playground. Pakai "image" yang sudah jadi.`);
     else if (typeof s.image !== 'string' || !s.image) out.problems.push(`${at}: wajib punya "image"`);
     if (s.privileged === true) out.problems.push(`${at}: "privileged" tidak diizinkan`);
-    for (const k of ['network_mode', 'pid', 'ipc', 'uts', 'userns_mode', 'cgroup']) if (s[k] === 'host' || (k === 'network_mode' && typeof s[k] === 'string' && String(s[k]).startsWith('container:'))) out.problems.push(`${at}: "${k}: ${String(s[k])}" tidak diizinkan`);
+    for (const k of ['network_mode', 'pid', 'ipc', 'uts', 'userns_mode', 'cgroup']) if (s[k] === 'host' || (typeof s[k] === 'string' && String(s[k]).startsWith('container:'))) out.problems.push(`${at}: "${k}: ${String(s[k])}" tidak diizinkan`);
     if (Array.isArray(s.cap_add) && s.cap_add.length) out.problems.push(`${at}: "cap_add" tidak diizinkan`);
     if (Array.isArray(s.devices) && s.devices.length) out.problems.push(`${at}: "devices" tidak diizinkan`);
     if (s.container_name !== undefined) out.problems.push(`${at}: hapus "container_name" (bentrok dengan susunan lain; nama dikelola otomatis)`);
+    if (s.extends !== undefined) out.problems.push(`${at}: "extends" tidak didukung (merujuk berkas lain yang tidak ikut dianalisis)`);
+    if (s.cgroup_parent !== undefined) out.problems.push(`${at}: "cgroup_parent" tidak diizinkan`);
+    if (Array.isArray(s.device_cgroup_rules) && s.device_cgroup_rules.length) out.problems.push(`${at}: "device_cgroup_rules" tidak diizinkan`);
+    if (s.volumes_from !== undefined) out.warnings.push(`${at}: "volumes_from" memakai volume kontainer lain; pastikan itu layanan di Compose ini`);
     if (s.env_file !== undefined) out.problems.push(`${at}: "env_file" tidak didukung; tulis nilainya di "environment"`);
-    if (Array.isArray(s.security_opt) && s.security_opt.some((o) => /unconfined/i.test(String(o)))) out.problems.push(`${at}: opsi keamanan "unconfined" tidak diizinkan`);
+    if (Array.isArray(s.security_opt) && s.security_opt.some((o) => /unconfined|label[:=][ ]*disable/i.test(String(o)))) out.problems.push(`${at}: opsi keamanan "unconfined" tidak diizinkan`);
     const vols = Array.isArray(s.volumes) ? s.volumes : [];
     for (const v of vols) { const p = volumeProblem(v); if (p) out.problems.push(`${at}: ${p}`); }
     const ports = (Array.isArray(s.ports) ? s.ports : []).map(parsePort).filter((p): p is { host: number | null; container: number } => p !== null);
@@ -68,8 +74,24 @@ export function analyze(text: string): ComposeAnalysis {
       }
     }
     if (typeof s.image === 'string' && (!s.image.includes(':') || s.image.endsWith(':latest')) && !s.image.includes('@')) out.warnings.push(`${at}: image "${s.image}" tanpa versi tetap; hasil uji bisa berubah antar pemasangan`);
+    const reg = typeof s.image === 'string' ? /^([a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?::\d+)?)\//i.exec(s.image)?.[1]?.toLowerCase() : undefined;
+    if (reg && !KNOWN_REGISTRIES.has(reg)) out.warnings.push(`${at}: image dari registri "${reg}" yang tidak dikenal; pastikan sumbernya tepercaya (kontainer berjalan di server nyata)`);
     if (!s.healthcheck) out.warnings.push(`${at}: tanpa healthcheck; status "siap" hanya berarti kontainer berjalan`);
     out.services.push({ name, image: String(s.image ?? ''), ports, volumes: vols.map((v) => (typeof v === 'string' ? v : JSON.stringify(v))), hasHealthcheck: !!s.healthcheck });
+  }
+  const top = (k: string): Obj => (isObj((doc as Obj)[k]) ? ((doc as Obj)[k] as Obj) : {});
+  if ((doc as Obj).include !== undefined) out.problems.push('"include" tidak didukung (merujuk berkas lain yang tidak ikut dianalisis)');
+  for (const [vn, v] of Object.entries(top('volumes'))) {   // volume bernama yang sebenarnya mengikat folder host (driver_opts: o=bind, device=/)
+    if (!isObj(v)) continue;
+    const o = isObj(v.driver_opts) ? v.driver_opts : {}, dev = String(o.device ?? ''), opts = String(o.o ?? ''), type = String(o.type ?? '');
+    if (/(^|,)bind(,|$)/.test(opts) || type === 'bind' || dev.startsWith('/') || dev.startsWith('~') || dev.includes('..')) out.problems.push(`Volume "${vn}": "driver_opts" yang mengikat folder host (device: ${dev || 'bind'}) tidak diizinkan. Pakai volume bernama biasa tanpa driver_opts.`);
+    if (typeof v.driver === 'string' && v.driver !== 'local') out.warnings.push(`Volume "${vn}": driver "${v.driver}" butuh plugin di server playground`);
+  }
+  for (const kind of ['secrets', 'configs'] as const) {   // file: menyalin berkas dari host ke kontainer
+    for (const [n, v] of Object.entries(top(kind))) {
+      const f = isObj(v) && typeof v.file === 'string' ? v.file : '';
+      if (f && (f.startsWith('/') || f.startsWith('~') || f.includes('..'))) out.problems.push(`${kind === 'secrets' ? 'Secret' : 'Config'} "${n}": "file: ${f}" membaca berkas dari host. Pakai "content" atau "environment".`);
+    }
   }
   if (!out.publish.length) out.warnings.push('Tidak ada port yang dipublikasikan ke server, jadi uji beban dari luar tidak bisa menjangkaunya. Tambahkan mis. "8080:80" pada layanan yang diuji.');
   else if (out.publish.some((p) => p.host === 0)) out.problems.push('Port host 0 tidak valid');
@@ -79,7 +101,7 @@ export function analyze(text: string): ComposeAnalysis {
 /** Analisis plus daftar batas sumber daya per layanan (untuk ringkasan hasil uji). */
 export function analyzeWithLimits(text: string): ComposeAnalysis & { limits: string[] } {
   const a = analyze(text); let limits: string[] = [];
-  try { const d = parse(text) as { services?: Record<string, { deploy?: { resources?: { limits?: Record<string, string> } } }> }; limits = Object.entries(d.services ?? {}).flatMap(([n, s]) => { const l = s?.deploy?.resources?.limits; return l ? [`${n}: ${[l.cpus ? `${l.cpus} CPU` : '', l.memory ?? ''].filter(Boolean).join(', ')}`] : []; }); } catch { /* sudah dilaporkan analyze */ }
+  try { const d = parse(text, { merge: true }) as { services?: Record<string, { deploy?: { resources?: { limits?: Record<string, string> } } }> }; limits = Object.entries(d.services ?? {}).flatMap(([n, s]) => { const l = s?.deploy?.resources?.limits; return l ? [`${n}: ${[l.cpus ? `${l.cpus} CPU` : '', l.memory ?? ''].filter(Boolean).join(', ')}`] : []; }); } catch { /* sudah dilaporkan analyze */ }
   return { ...a, limits };
 }
 
@@ -95,7 +117,7 @@ const toMb = (v: string): number | undefined => { const m = MEM.exec(String(v).t
 export function serviceLimits(text: string): Record<string, { cpus?: number; memMb?: number }> {
   const out: Record<string, { cpus?: number; memMb?: number }> = {};
   try {
-    const d = parse(text) as { services?: Record<string, { deploy?: { resources?: { limits?: Record<string, string> } } }> };
+    const d = parse(text, { merge: true }) as { services?: Record<string, { deploy?: { resources?: { limits?: Record<string, string> } } }> };
     for (const [n, s] of Object.entries(d.services ?? {})) {
       const l = s?.deploy?.resources?.limits; if (!l) continue;
       const cpus = Number(l.cpus), memMb = l.memory ? toMb(l.memory) : undefined;

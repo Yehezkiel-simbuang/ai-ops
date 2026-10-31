@@ -144,7 +144,8 @@ export async function exportMarkdown(serverId: number): Promise<string> {
   if (s.runbook) L.push('## Catatan / Runbook', '', s.runbook, '');
   return L.join('\n');
 }
-const csv = (v: unknown): string => { const t = String(v ?? ''); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+/** Sel yang diawali = + @ tab atau - (selain angka dan penanda "-") dijalankan sebagai rumus oleh Excel/Sheets; os_info dan nama berasal dari server yang dikelola, jadi diawali apostrof. */
+const csv = (v: unknown): string => { let t = String(v ?? ''); if (/^[=+@\t\r]/.test(t) || /^-(?![\d.,]+$)./.test(t)) t = "'" + t; return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
 export async function exportCsv(): Promise<string> {
   const rows = await inventory({}), head = ['nama', 'alamat_utama', 'host_ssh', 'pengguna_ssh', 'fungsi', 'lingkungan', 'tag', 'pemilik', 'lokasi', 'os', 'jumlah_kredensial', 'pemeliharaan_berikutnya', 'terlambat'];
   return [head.join(','), ...rows.map((r) => [r.name, r.primary_address, r.host, r.username, r.purpose, r.environment, (r.tags as string[]).join(' '), r.owner, r.location, r.os_info, r.credentials, dt(r.next_due), r.overdue].map(csv).join(','))].join('\n');

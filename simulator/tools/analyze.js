@@ -15,7 +15,8 @@ const path = require('path');
 const SKIP = new Set(['vendor', 'node_modules', '.git', 'storage', 'bootstrap', 'public', 'dist', 'build', '.idea', '.vscode', 'backup']);
 const ENV_WHITELIST = ['APP_ENV', 'APP_DEBUG', 'DB_CONNECTION', 'DB_HOST', 'CACHE_DRIVER', 'CACHE_STORE', 'SESSION_DRIVER', 'QUEUE_CONNECTION', 'REDIS_HOST', 'REDIS_CLIENT', 'LOG_LEVEL', 'BCRYPT_ROUNDS'];
 
-function read(p) { try { const s = fs.statSync(p); if (s.size > 600000) return ''; return fs.readFileSync(p, 'utf8'); } catch (e) { return ''; } }
+// symlink tidak diikuti (repo berbahaya bisa menautkan ke rahasia di luar proyek)
+function read(p) { try { const s = fs.lstatSync(p); if (!s.isFile() || s.size > 600000) return ''; return fs.readFileSync(p, 'utf8'); } catch (e) { return ''; } }
 function exists(p) { try { fs.accessSync(p); return true; } catch (e) { return false; } }
 function walk(dir, exts, out, depth) {
   out = out || []; depth = depth || 0;
@@ -23,6 +24,7 @@ function walk(dir, exts, out, depth) {
   let list = [];
   try { list = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return out; }
   list.forEach(function (d) {
+    if (d.isSymbolicLink()) return;   // tidak mengikuti symlink
     if (d.isDirectory()) { if (!SKIP.has(d.name)) walk(path.join(dir, d.name), exts, out, depth + 1); }
     else if (exts.some(function (x) { return d.name.endsWith(x); })) out.push(path.join(dir, d.name));
   });
