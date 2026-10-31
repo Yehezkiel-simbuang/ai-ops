@@ -11,6 +11,7 @@ const approveBody = z.object({ steps: z.array(z.number().int()).max(20).optional
 export function incidentRoutes(): Router {
   const r = Router();
   r.get('/incidents', handle((req) => Incidents.listIncidents(String(req.query.status ?? 'open'))));
+  r.get('/incidents/page', handle((req) => Incidents.pageIncidents(String(req.query.status ?? 'open'), { offset: Number(req.query.offset) || 0, limit: Number(req.query.limit) || 25, q: String(req.query.q ?? '').trim().slice(0, 100) })));
   r.get('/incidents/:id', handle((req) => Incidents.incidentDetail(idParam(req))));
   r.post('/incidents/:id/regenerate', handle(async (req) => ({ id: await Incidents.generate(idParam(req), { useModel: parse(regenerateBody, req.body).useModel }) })));
   r.put('/incidents/:id/notes', handle((req) => Incidents.saveNotes(idParam(req), parse(Incidents.notesSchema, req.body), req.user!.username)));

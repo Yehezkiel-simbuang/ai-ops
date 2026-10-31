@@ -36,10 +36,10 @@ export const Note = ({ children, className = '' }: { children: ReactNode; classN
 /** Daftar baris bergaya kartu; tiap anak biasanya <Item>. */
 export const List = ({ children }: { children: ReactNode }) => <div className="list">{children}</div>;
 
-interface ItemProps { title: ReactNode; sub?: ReactNode[]; to?: string; children?: ReactNode; off?: boolean; top?: boolean }
+interface ItemProps { title: ReactNode; sub?: ReactNode[]; to?: string; children?: ReactNode; off?: boolean; top?: boolean; accent?: string }
 /** Satu baris daftar: judul + baris keterangan kecil di kiri, aksi/label di kanan. Dengan `to` seluruh baris menjadi tautan. */
-export function Item({ title, sub = [], to, children, off, top }: ItemProps) {
-  const cls = ['item', to ? 'click' : '', off ? 'off' : '', top ? 'top' : ''].filter(Boolean).join(' ');
+export function Item({ title, sub = [], to, children, off, top, accent }: ItemProps) {
+  const cls = ['item', to ? 'click' : '', off ? 'off' : '', top ? 'top' : '', accent ? `accent-${accent}` : ''].filter(Boolean).join(' ');
   const body = (
     <>
       <div className="meta">

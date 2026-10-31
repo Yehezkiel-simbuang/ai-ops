@@ -301,3 +301,11 @@ fieldset.tpl-fills legend { font-weight: 600; font-size: .88rem; padding: 0 6px;
 .menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 170px; display: flex; flex-direction: column; padding: 4px; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .12); }
 .menu-list button { border: 0; justify-content: flex-start; width: 100%; text-align: left; }
 .menu-list button.danger { color: var(--bad); }
+.item[class*="accent-"] { border-left: 4px solid transparent; padding-left: 10px; }
+.item.accent-critical { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 7%, transparent); }
+.item.accent-major { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 7%, transparent); }
+.item.accent-minor { border-left-color: var(--info); }
+.item.accent-info { border-left-color: var(--line-strong); }
+.item.accent-done { border-left-color: var(--ok); color: var(--muted); }
+.item.accent-done .meta b { font-weight: 500; }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 10px; flex-wrap: wrap; }

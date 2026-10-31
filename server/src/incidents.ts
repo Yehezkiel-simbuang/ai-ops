@@ -232,6 +232,19 @@ async function similar(inc: Record<string, any>) {
   return out;
 }
 
+/** Daftar berhalaman dengan pencarian (judul, detail, server, penyebab, penyelesaian). Yang terbuka: paling parah dulu; yang pulih: paling baru pulih dulu. */
+export async function pageIncidents(status: string, o: { offset: number; limit: number; q: string }) {
+  const st = status === 'resolved' ? 'resolved' : 'open', like = `%${o.q.replace(/[\\%_]/g, (c) => '\\' + c)}%`, args: unknown[] = [st];
+  let where = 'WHERE i.status=$1';
+  if (o.q) { args.push(like); where += ` AND (i.title ILIKE $2 OR i.detail ILIKE $2 OR s.name ILIKE $2 OR i.cause ILIKE $2 OR i.solution ILIKE $2)`; }
+  const order = st === 'open' ? "CASE i.severity WHEN 'critical' THEN 0 WHEN 'major' THEN 1 WHEN 'minor' THEN 2 ELSE 3 END, i.opened DESC" : 'i.resolved_at DESC NULLS LAST, i.id DESC';
+  const total = Number((await db().one<{ n: string }>(`SELECT count(*) AS n FROM incidents i JOIN servers s ON s.id=i.server_id ${where}`, args))!.n);
+  const rows = await db().query(`SELECT i.id, i.server_id, s.name AS server_name, i.key, i.kind, i.title, i.severity, i.detail, i.value, i.opened, i.last_event, i.resolved_at, i.status, i.event_count, i.closed_by,
+      (i.cause<>'' OR i.solution<>'') AS has_notes,
+      (SELECT r.status FROM recommendations r WHERE r.incident_id=i.id ORDER BY r.id DESC LIMIT 1) AS rec_status
+    FROM incidents i JOIN servers s ON s.id=i.server_id ${where} ORDER BY ${order} LIMIT ${Math.min(Math.max(o.limit, 1), 100)} OFFSET ${Math.max(o.offset, 0)}`, args);
+  return { total, rows };
+}
 export async function incidentDetail(id: number) {
   const inc = await db().one('SELECT i.*, s.name AS server_name FROM incidents i JOIN servers s ON s.id=i.server_id WHERE i.id=$1', [id]); if (!inc) throw new HttpError(404, 'Insiden tidak ada');
   const recs = await db().query('SELECT * FROM recommendations WHERE incident_id=$1 ORDER BY id DESC LIMIT 5', [id]);

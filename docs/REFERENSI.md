@@ -217,6 +217,7 @@ Agar agen bisa menghubungi aplikasi, setel `PUBLIC_URL` (alamat yang terjangkau 
 - Di halaman insiden, isi **Penyebab** dan **Penyelesaian** (tersimpan di tabel `incidents`, migrasi 028, dengan nama dan waktu). Bisa diisi saat insiden masih terbuka.
 - **Tutup manual** untuk insiden yang agen tak bisa mendeteksi pulihnya; alasan wajib dan dicatat bersama nama penutup. Bila kondisinya masih buruk, agen membuka insiden baru pada kejadian berikutnya.
 - Insiden baru menampilkan **Pernah terjadi sebelumnya**: insiden pulih dengan jenis (`kind`) sama, paling mirip dulu (server dan kunci sama, lalu kunci sama di server lain, lalu jenis sama), maksimal 5. Yang masuk hanya yang punya catatan atau yang rekomendasinya berhasil membuat insiden pulih; langkah ubah yang dulu selesai ikut ditampilkan sebagai "perbaikan yang dulu berhasil".
+- Halaman Insiden: yang **terbuka** bergaris warna menurut tingkat (paling parah dulu, jumlahnya di judul); yang **pulih** diredam tetapi tingkat aslinya tetap tampil, dengan penanda "ada catatan". Daftar pulih berhalaman (15 per halaman, total terlihat) dan bisa dicari lewat judul, detail, server, penyebab, atau penyelesaian (`GET /api/incidents/page`).
 - Kemiripan sengaja sederhana (jenis dan kunci), bukan tebakan model, agar bisa dijelaskan dan diuji.
 
 ## Pengembangan dan tes

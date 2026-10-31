@@ -4,7 +4,7 @@ import { queryOptions, useMutation, useQueryClient, type QueryKey } from '@tanst
 import { get, qs } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type {
-  AgentOverview, FleetAgent, PatchDetail, PatchOverview, PatchPlan, PatchPlanItem, AppConfig, AppSettings, AuditEntry, Channel, ChecksMeta, Credential, IncidentDetail, Incident, InventoryRow, MaintenanceLogEntry,
+  AgentOverview, IncidentPage, FleetAgent, PatchDetail, PatchOverview, PatchPlan, PatchPlanItem, AppConfig, AppSettings, AuditEntry, Channel, ChecksMeta, Credential, IncidentDetail, Incident, InventoryRow, MaintenanceLogEntry,
   MaintenanceTask, MaintenanceTemplate, MonitorView, NotificationLog, Overview, Run, RunDetail, RunTemplate, Server, ServerProfile, UsageSummary, User
 } from './types';
 
@@ -21,6 +21,7 @@ export const q = {
   agent: (id: number) => queryOptions({ queryKey: ['servers', id, 'agent'], queryFn: () => get<AgentOverview>(`/api/servers/${id}/agent`), refetchInterval: s(5) }),
 
   incidents: (status: 'open' | 'resolved') => queryOptions({ queryKey: ['incidents', status], queryFn: () => get<Incident[]>(`/api/incidents${qs({ status })}`), refetchInterval: s(6) }),
+  incidentsPage: (status: 'open' | 'resolved', offset: number, limit: number, search: string) => queryOptions({ queryKey: ['incidents', 'page', status, offset, limit, search], queryFn: () => get<IncidentPage>(`/api/incidents/page${qs({ status, offset, limit, q: search })}`), refetchInterval: s(6), placeholderData: (prev) => prev }),
   incident: (id: number) => queryOptions({ queryKey: ['incidents', 'detail', id], queryFn: () => get<IncidentDetail>(`/api/incidents/${id}`), refetchInterval: s(1.5) }),
 
   runs: () => queryOptions({ queryKey: ['runs'], queryFn: () => get<Run[]>('/api/runs'), refetchInterval: s(5) }),

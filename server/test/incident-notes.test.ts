@@ -59,3 +59,17 @@ describe('buku solusi', () => {
     expect(d.similar).toHaveLength(1); expect(d.similar[0].worked).toEqual([{ title: 'Jalankan ulang nginx', command: 'sudo systemctl restart nginx' }]);   // langkah baca tidak dihitung sebagai perbaikan
   });
 });
+
+describe('daftar berhalaman', () => {
+  const page = async (qs: string) => (await h.call('GET', `/api/incidents/page?${qs}`)).json as { total: number; rows: Array<{ id: number; title: string; severity: string; has_notes: boolean }> };
+  it('terbuka: paling parah dulu; total dan potongan halaman benar', async () => {
+    await send(a, 'open', 'urut-minor', { severity: 'minor', title: 'zzz minor' }); await send(a, 'open', 'urut-crit', { severity: 'critical', title: 'zzz crit' }); await send(a, 'open', 'urut-major', { severity: 'major', title: 'zzz major' });
+    const all = await page('status=open&q=zzz'); expect(all.rows.map((r) => r.severity)).toEqual(['critical', 'major', 'minor']); expect(all.total).toBe(3);
+    const p2 = await page('status=open&q=zzz&limit=2&offset=2'); expect(p2.total).toBe(3); expect(p2.rows.map((r) => r.severity)).toEqual(['minor']);
+  });
+  it('pulih: pencarian menemukan lewat catatan penyebab dan nama server; karakter khusus tidak jadi pola', async () => {
+    const id = await send(a, 'open', 'cari-1', { title: 'judul biasa' }); await h.call('PUT', `/api/incidents/${id}/notes`, { cause: 'kabel jaringan longgar' }); await send(a, 'resolved', 'cari-1', { title: 'judul biasa' });
+    const byCause = await page('status=resolved&q=kabel'); expect(byCause.rows.map((r) => r.id)).toEqual([id]); expect(byCause.rows[0]!.has_notes).toBe(true);
+    expect((await page('status=resolved&q=srv-b')).total).toBeGreaterThan(0); expect((await page('status=resolved&q=%25')).total).toBe(0);   // "%" dicari apa adanya, bukan "semua"
+  });
+});

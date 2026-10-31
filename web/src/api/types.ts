@@ -65,6 +65,7 @@ export interface Incident {
   event_count: number; rec_status: RecStatus | null; diag?: Array<{ name: string; out: string }>;
   cause?: string; solution?: string; noted_by?: string | null; noted_at?: number | null; closed_by?: string | null; closed_reason?: string | null;
 }
+export interface IncidentPage { total: number; rows: Array<Incident & { has_notes?: boolean }> }
 export interface SimilarIncident {
   id: number; server_name: string; title: string; severity?: Level; opened: number; resolved_at: number | null; cause: string; solution: string; noted_by: string | null;
   closed_by: string | null; closed_reason: string | null; score: number; worked: Array<{ title: string; command: string }>;
