@@ -78,7 +78,7 @@ export function AppShell() {
         <Logo size={20} title="" /><strong>{pageTitle(pathname)}</strong>
       </header>
       <nav id="menu-utama" className={`side${open ? ' open' : ''}`} aria-label="Navigasi utama">
-        <div className="logo"><Logo size={24} title="" /><span>AI Ops Pribadi</span></div>
+        <div className="logo"><Logo size={24} title="" /><span>AI Ops</span></div>
         {GROUPS.map((g) => (
           <div key={g.title} className="navgroup" role="group" aria-label={g.title}>
             <div className="navhead" aria-hidden>{g.title}</div>
