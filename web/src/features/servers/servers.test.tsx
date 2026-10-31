@@ -75,9 +75,9 @@ describe('ServersPage: memasukkan kunci', () => {
   it('server dengan kunci publik tersimpan punya tombol untuk menampilkannya lagi; yang kuncinya ditempel tidak', async () => {
     mockApi({ 'GET /api/servers': { body: [server({ ssh_pub: 'ssh-ed25519 AAAA aiops-srv-a' }), server({ id: 4, name: 'srv-b' })] } });
     renderWithProviders(<ServersPage />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Kunci publik srv-a' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Aksi lain srv-a' })); await userEvent.click(screen.getByRole('menuitem', { name: 'Kunci publik' }));
     expect(await screen.findByText(/echo 'ssh-ed25519 AAAA aiops-srv-a'/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Kunci publik srv-b' })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}'); await userEvent.click(screen.getByRole('button', { name: 'Aksi lain srv-b' })); expect(screen.queryByRole('menuitem', { name: 'Kunci publik' })).not.toBeInTheDocument(); expect(screen.getByRole('menuitem', { name: 'Hapus' })).toBeInTheDocument();
   });
 });
 
@@ -88,7 +88,7 @@ describe('dialog kunci publik', () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });   // user-event memasang papan klip tiruannya sendiri
       mockApi({ 'GET /api/servers': { body: [server({ ssh_pub: 'ssh-ed25519 AAAA aiops-srv-a' })] } });
       renderWithProviders(<ServersPage />);
-      await user.click(await screen.findByRole('button', { name: 'Kunci publik srv-a' }));
+      await user.click(await screen.findByRole('button', { name: 'Aksi lain srv-a' })); await user.click(screen.getByRole('menuitem', { name: 'Kunci publik' }));
       expect(await screen.findByText(/echo 'ssh-ed25519 AAAA aiops-srv-a'/)).toBeInTheDocument();
       expect(screen.queryByText(/Disembunyikan otomatis/)).not.toBeInTheDocument();
       await vi.advanceTimersByTimeAsync(60_000);

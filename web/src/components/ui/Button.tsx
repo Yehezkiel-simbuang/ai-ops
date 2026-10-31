@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type MouseEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from '@/lib/toast';
-import type { IconType } from '../icons';
+import { IconArrowRight, type IconType } from '../icons';
 
 interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> {
   icon?: IconType;
@@ -28,4 +29,9 @@ export function Button({ icon: Icon, primary, onClick, children, className, disa
       {children}
     </button>
   );
+}
+
+/** Tautan ke halaman lain yang tampil seperti tombol, dengan panah di ujung supaya jelas berbeda dari aksi. */
+export function LinkButton({ to, icon: Icon, children }: { to: string; icon?: IconType; children: string }) {
+  return <Link className="btn-link" to={to}>{Icon && <Icon size={16} aria-hidden />}{children}<IconArrowRight size={14} aria-hidden /></Link>;
 }

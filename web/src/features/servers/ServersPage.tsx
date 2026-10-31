@@ -7,13 +7,14 @@ import { useDialogs } from '@/components/dialogs/DialogProvider';
 import { ServerStatusBadge } from '@/components/StatusBadges';
 import { Async } from '@/components/ui/Async';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Button, LinkButton } from '@/components/ui/Button';
+import { Menu } from '@/components/ui/Menu';
 import { Field, useForm } from '@/components/ui/Field';
 import { AgentFleet } from '@/features/agent/AgentFleet';
 import { DataGrid, type Column } from '@/components/ui/DataGrid';
 import { Empty, Hint, PageHead } from '@/components/ui/Layout';
 import { Modal } from '@/components/ui/Modal';
-import { IconBolt, IconBook, IconCheck, IconClose, IconFolder, IconKey, IconPlus, IconRefresh, IconServer, IconTrash, IconWrench } from '@/components/icons';
+import { IconBolt, IconBook, IconCheck, IconClose, IconCpu, IconFolder, IconKey, IconPlus, IconPulse, IconRefresh, IconServer, IconTrash, IconWrench } from '@/components/icons';
 import { del, post, put } from '@/lib/api';
 import { ago } from '@/lib/format';
 import { toast } from '@/lib/toast';
@@ -119,13 +120,15 @@ function ServerActions({ s, onEdit }: { s: Server; onEdit: (s: Server) => void }
   const remove = useAction(() => del(`/api/servers/${s.id}`), { invalidate: [...refresh, ['inventory']] });
   return (
     <div className="row" style={{ gap: 6 }}>
-      <Badge tone="acc" to={`/monitor/${s.id}`}>Monitor</Badge>
+      <LinkButton to={`/monitor/${s.id}`} icon={IconPulse}>Monitor</LinkButton>
+      <LinkButton to={`/agen/${s.id}`} icon={IconCpu}>Agen</LinkButton>
       <Button icon={IconBolt} onClick={() => test.mutateAsync()}>Uji koneksi</Button>
-      <Button icon={IconRefresh} aria-label={`Periksa ${s.name}`} title="Periksa sekarang" onClick={() => check.mutateAsync()} />
-      <Badge tone="acc" to={`/agen/${s.id}`}>Agen</Badge>
-      {s.ssh_pub && <Button icon={IconKey} aria-label={`Kunci publik ${s.name}`} title="Kunci publik untuk dipasang di server" onClick={() => showText(`Pasang kunci publik: ${s.name}`, installHelp(s.username), installCommand(s.ssh_pub, s.username))} />}
-      <Button icon={IconWrench} aria-label={`Ubah ${s.name}`} title="Ubah" onClick={() => onEdit(s)} />
-      <Button icon={IconTrash} aria-label={`Hapus ${s.name}`} title="Hapus" onClick={async () => { if (await confirm(`Hapus server ${s.name} beserta metrik dan peringatannya?`, 'Hapus')) await remove.mutateAsync(); }} />
+      <Button icon={IconRefresh} title="Periksa sekarang" onClick={() => check.mutateAsync()}>Periksa</Button>
+      <Menu label={`Aksi lain ${s.name}`} items={[
+        { label: 'Kunci publik', icon: IconKey, hidden: !s.ssh_pub, onSelect: () => showText(`Pasang kunci publik: ${s.name}`, installHelp(s.username), installCommand(s.ssh_pub!, s.username)) },
+        { label: 'Ubah', icon: IconWrench, onSelect: () => onEdit(s) },
+        { label: 'Hapus', icon: IconTrash, danger: true, onSelect: async () => { if (await confirm(`Hapus server ${s.name} beserta metrik dan peringatannya?`, 'Hapus')) await remove.mutateAsync(); } }
+      ]} />
     </div>
   );
 }
