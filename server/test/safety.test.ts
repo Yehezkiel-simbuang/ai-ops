@@ -9,7 +9,11 @@ const cases: Array<[string, 'read' | 'change' | 'blocked']> = [
   ['redis-cli info memory', 'read'], ['nginx -t', 'read'], ['php-fpm8.2 -tt', 'read'], ['curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/status', 'read'], ['grep -c "reached pm.max_children" /var/log/php8.2-fpm.log', 'read'],
   ['find /var/log -name "*.log" -size +100M', 'read'], ['ss -s; vmstat 1 3', 'read'], ['cat /proc/pressure/io', 'read'], ['ls -la /etc/mysql/ 2>/dev/null', 'read'], ['echo $(nproc)', 'read'], ['ip -s link', 'read'], ['docker ps', 'read'],
   ['pveversion -v', 'read'], ['pct list', 'read'], ['top -bn1 | head -15', 'read'], ["awk '{print $1}' /proc/loadavg", 'read'], ['timeout 10 iostat -x 1 3', 'read'],
+  ['redis-check-aof /var/lib/redis/appendonlydir/appendonly.aof.manifest', 'read'], ['sudo -n redis-check-aof /var/lib/redis/appendonlydir/appendonly.aof.manifest', 'read'], ['redis-check-rdb /var/lib/redis/dump.rdb', 'read'],
+  ['systemctl show redis-server -p NRestarts -p Result', 'read'], ['tail -n 80 /var/log/redis/redis-server.log', 'read'], ['ls -l --time-style=long-iso /var/lib/redis /var/lib/redis/appendonlydir ; df -h /var/lib/redis', 'read'],
   // ubah (perlu persetujuan)
+  ['redis-check-aof --fix /var/lib/redis/appendonlydir/appendonly.aof.manifest', 'change'], ['sudo redis-check-aof --fix x.manifest', 'change'], ['redis-check-aof --truncate-to-timestamp 1774742244 x.manifest', 'change'],
+  ['yes | redis-check-aof --fix x.manifest', 'change'], ['cp -a /var/lib/redis /root/redis-backup-$(date +%Y%m%d%H%M)', 'change'],
   ['systemctl restart nginx', 'change'], ['sysctl -w vm.swappiness=10', 'change'], ['echo "x" > /etc/sysctl.d/99.conf', 'change'], ['apt-get install -y htop', 'change'], ['sed -i "s/a/b/" /etc/mysql/my.cnf', 'change'],
   ['mysql -e "SET GLOBAL innodb_flush_log_at_trx_commit=2"', 'change'], ['mysql -e "SELECT 1; DELETE FROM t"', 'change'], ['mysql -e "SELECT * FROM t INTO OUTFILE \'/tmp/x\'"', 'change'], ['zpool set autotrim=on rpool', 'change'],
   ['curl -X POST http://127.0.0.1/x', 'change'], ['curl -s https://example.com/', 'change'], ['cat /etc/hosts | tee /etc/hosts.bak', 'change'], ['find / -name x -delete', 'change'], ['find . -exec rm {} \\;', 'change'],

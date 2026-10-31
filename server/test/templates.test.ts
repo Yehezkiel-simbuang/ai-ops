@@ -41,6 +41,13 @@ describe('katalog templat', () => {
     expect(SETUP_TEMPLATES.find((t) => t.id === 'baseline')!.goal).toMatch(/reload, bukan restart/);   // pengerasan SSH tidak memutus akses
   });
 
+  it('templat pemasangan Redis membawa pelajaran dari kasus AOF rusak: persistensi terkendali, memori sisa untuk fork, batas waktu start, cadangan teruji, dan pemantauan', () => {
+    const t = SETUP_TEMPLATES.find((x) => x.id === 'redis-install')!;
+    for (const re of [/appendfsync everysec/, /auto-aof-rewrite-percentage/, /auto-aof-rewrite-min-size/, /sekitar 60% RAM/, /copy-on-write/, /TimeoutStartSec/, /redis-check-rdb/, /rdb_last_bgsave_status ok/, /paket Redis di Monitor/, /vm\.overcommit_memory=1/]) expect(t.goal, String(re)).toMatch(re);
+    expect(t.steps.join(' ')).toMatch(/TimeoutStartSec/); expect(t.steps.join(' ')).toMatch(/redis-check-rdb/);
+    expect(holes(t.goal)).toHaveLength(2); expect(t.ask).toEqual(['Batas memori', 'Cache atau persisten']); expect(t.maxTurns).toBeGreaterThanOrEqual(50);
+  });
+
   it('API templat mengembalikan kategori, ask, dan anggaran yang disarankan', async () => {
     const t = (await h.call('GET', '/api/templates')).json as Array<Record<string, any>>, pg = t.find((x) => x.id === 'postgres-install')!;
     expect(pg).toMatchObject({ category: 'Data dan antrean', maxTurns: 40, tokenBudget: 300000 }); expect(pg.ask).toEqual(['Nama database', 'Pengguna aplikasi', 'Alamat klien']); expect(t.find((x) => x.id === 'diagnosis')).toMatchObject({ category: 'Diagnosis dan tuning' });
@@ -54,6 +61,13 @@ describe('membuat proses dari templat pemasangan', () => {
     const filled = t.goal.split(PLACEHOLDER.source).length && t.goal.replace(new RegExp(PLACEHOLDER.source, 'g'), 'appdb');
     const ok = await h.call('POST', '/api/runs', { ...body, goal: filled }); expect(ok.status).toBe(200);
     const run = (await h.call('GET', `/api/runs/${ok.json.id}`)).json.run; expect(run.steps).toHaveLength(t.steps.length); expect(run.goal).toContain('appdb'); expect(run.goal).toContain(RULES.slice(0, 40));
+  });
+  it('templat Redis adalah diagnosis baca saja: tanpa bagian [ISI], tidak menyuruh restart atau menghapus data, dan bisa langsung dipakai', async () => {
+    const t = TEMPLATES.find((x) => x.id === 'redis')!; expect(t.category).toBe('Diagnosis dan tuning'); expect(holes(t.goal)).toEqual([]);
+    expect(t.goal).toMatch(/Hanya baca/); expect(t.goal).toMatch(/Jangan restart, hapus berkas data/); expect(t.goal).toMatch(/tanpa menampilkan nilainya/);
+    expect(`${t.goal} ${t.steps.join(' ')}`).not.toMatch(/flushall|flushdb|rm\s+-|chmod\s+777|--bigkeys/i);
+    const run = await h.call('POST', '/api/runs', { serverId: sid, template: t.id }); expect(run.status).toBe(200);
+    expect((await h.call('GET', `/api/runs/${run.json.id}`)).json.run.steps).toHaveLength(t.steps.length);
   });
   it('templat diagnosis lama tetap bisa dipakai tanpa mengisi apa pun', async () => {
     const t = TEMPLATES.find((x) => x.id === 'diagnosis')!; expect(holes(t.goal)).toEqual([]);

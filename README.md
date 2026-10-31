@@ -52,7 +52,7 @@ AI Ops adalah aplikasi web yang dijalankan sendiri (self-hosted) untuk orang yan
 - **Jadwal pemeliharaan**: tugas berulang atau sekali per server dengan templat standar (pembaruan OS, uji pulih cadangan, kesehatan disk, rotasi kredensial, sertifikat, dan lainnya), pengingat harian, dan riwayat.
 
 ### Menyiapkan server (Setup)
-- Tulis tujuan, atau pilih salah satu dari **23 templat**, dan agen menyusun langkahnya. Setiap perubahan menunggu persetujuan Anda.
+- Tulis tujuan, atau pilih salah satu dari **24 templat**, dan agen menyusun langkahnya. Setiap perubahan menunggu persetujuan Anda.
 - **Fondasi server**: pengamanan dasar (firewall, fail2ban, SSH), Docker dan Compose, backup terenkripsi (restic), Netdata.
 - **Aplikasi**: Node.js (Express + TypeScript), frontend React (Vite), layanan Go, Laravel, dan proyek docker-compose milik Anda.
 - **Data dan antrean**: PostgreSQL, MySQL/MariaDB, Redis, RabbitMQ, Qdrant.

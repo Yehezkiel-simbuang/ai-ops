@@ -68,6 +68,29 @@ interface Plan { diagnosis: string; steps: StepSpec[]; verify: string }
 const q = (s: string) => "'" + s.replace(/'/g, `'\\''`) + "'";
 const SAFE = /^[A-Za-z0-9@._:/-]+$/;
 
+/** Redis tidak aktif. Kasus yang sudah terjadi: server mati mendadak, berkas AOF terpotong atau berisi nol, lalu Redis keluar tiap kali memuat dan systemd menyalakannya lagi
+ *  (unit terus "activating", NRestarts naik, log: "Bad file format reading the append only file"). Hanya baca dan cadangan; memotong AOF (--fix) sengaja tidak otomatis karena menghapus data. */
+export function redisPlan(unit: string, sudo: string): Plan {
+  const read = (title: string, command: string, rationale: string): StepSpec => ({ title, command, rationale, risk: 'rendah' });
+  return {
+    diagnosis: `Layanan ${unit} tidak aktif. Penyebab yang sering: (1) crash-loop setelah server mati mendadak: berkas AOF terpotong atau berisi nol sehingga Redis keluar saat memuat; unit terus berstatus activating dan NRestarts naik, log menyebut "Bad file format reading the append only file"; (2) port 6379 masih dipegang proses lama; (3) pemilik atau izin direktori data tidak cocok dengan unit; (4) memori tidak cukup untuk memuat data. `
+      + 'Langkah baca mengumpulkan buktinya. Bila AOF rusak, "redis-check-aof" tanpa --fix melaporkan "diff", yaitu byte yang akan terpotong; diff kecil di ujung file berarti kehilangan data sedikit. '
+      + 'Memperbaiki dengan "redis-check-aof --fix" memotong file dan menghapus semua data setelah titik rusak, jadi sengaja tidak ada di rencana ini: lakukan sendiri setelah cadangan ada dan diff-nya Anda nilai kecil. Jangan hapus appendonlydir atau dump.rdb. Ini layanan data: restart memutus semua koneksi.',
+    steps: [
+      read('Status layanan dan jumlah restart', `${sudo}systemctl status ${unit} --no-pager -n 20 ; ${sudo}systemctl show ${unit} -p NRestarts -p Result -p ExecMainStatus -p TimeoutStartUSec`, 'Status terus "activating" dan NRestarts yang naik menandakan crash-loop, bukan layanan yang sekadar mati.'),
+      read('Journal terakhir', `${sudo}journalctl -u ${unit} -n 60 --no-pager`, 'Mencari penyebab berhenti: konfigurasi, izin, port terpakai, OOM.'),
+      read('Log Redis', `${sudo}tail -n 80 /var/log/redis/redis-server.log`, 'Alasan Redis keluar ada di sini, mis. "Bad file format reading the append only file". Jalur bawaan Debian/Ubuntu; sesuaikan bila logfile di redis.conf berbeda.'),
+      read('Berkas data dan AOF (ukuran dan jam ubah)', `${sudo}ls -l --time-style=long-iso /var/lib/redis /var/lib/redis/appendonlydir ; df -h /var/lib/redis`, 'Berkas yang jam ubahnya berhenti berbulan-bulan berarti persistensi mati sejak itu; disk penuh juga merusak AOF.'),
+      read('Periksa AOF (baca saja)', `${sudo}redis-check-aof /var/lib/redis/appendonlydir/appendonly.aof.manifest`, 'Melaporkan byte pertama yang rusak (ok_up_to) dan jumlah byte sesudahnya (diff). Tanpa --fix tidak mengubah apa pun.'),
+      read('Memori dan overcommit', `${sudo}free -m ; ${sudo}sysctl vm.overcommit_memory`, 'Memuat data besar butuh RAM; overcommit 0 membuat fork untuk snapshot bisa gagal, dan snapshot yang berhenti membuat berkas data basi.'),
+      { title: `Hentikan ${unit} (putus siklus restart)`, command: `${sudo}systemctl stop ${unit}`, rationale: 'Menyalin berkas data saat Redis sedang memuat atau menulis tidak konsisten.', risk: 'sedang', rollback: `${sudo}systemctl start ${unit}` },
+      { title: 'Cadangkan direktori data Redis', command: `${sudo}cp -a /var/lib/redis /root/redis-backup-$(date +%Y%m%d%H%M)`, rationale: 'Salinan utuh sebelum berkas apa pun diperbaiki atau dipotong. Pastikan ruang disk cukup (lihat langkah berkas data).', risk: 'sedang', rollback: 'Salinan tidak mengubah data asli; hapus manual bila tidak diperlukan.' },
+      { title: `Jalankan ulang ${unit}`, command: `${sudo}systemctl restart ${unit}`, rationale: 'Hanya setelah penyebab jelas dan diperbaiki; bila AOF masih rusak, Redis akan kembali crash-loop.', risk: 'tinggi', rollback: `${sudo}systemctl status ${unit} --no-pager` }
+    ],
+    verify: `${sudo}systemctl is-active ${unit}`
+  };
+}
+
 export function playbook(inc: { key: string; kind: string; title: string; detail: string }, server: { use_sudo: boolean }): Plan {
   const sudo = server.use_sudo ? 'sudo -n ' : '';
   const arg = inc.key.includes(':') ? inc.key.slice(inc.key.indexOf(':') + 1) : '';
@@ -76,6 +99,7 @@ export function playbook(inc: { key: string; kind: string; title: string; detail
     case 'service': {
       const unit = SAFE.test(arg) ? arg : '';
       if (!unit) break;
+      if (/^redis(-server)?$/.test(unit)) return redisPlan(unit, sudo);
       const db = /^(mysql|mysqld|mariadb|postgresql|redis|redis-server)/.test(unit);
       return { diagnosis: `Layanan ${unit} tidak aktif. Periksa dulu penyebabnya di status dan journal; restart hanya bila penyebabnya sudah jelas dan aman.${db ? ' Ini layanan data: restart memutus semua koneksi yang sedang berjalan.' : ''}`,
         steps: [read('Lihat status layanan', `${sudo}systemctl status ${unit} --no-pager -n 20`, 'Memastikan keadaan dan pesan galat terakhir.'), read('Baca journal terakhir', `${sudo}journalctl -u ${unit} -n 60 --no-pager`, 'Mencari penyebab berhenti (OOM, konfigurasi salah, disk penuh).'),
