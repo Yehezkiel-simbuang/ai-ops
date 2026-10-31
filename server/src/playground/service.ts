@@ -165,6 +165,20 @@ export async function containers(id: number) {
   const r = await ssh(s, `cd ${dir(id)} 2>/dev/null && docker compose -p ${project(id)} ps --format json 2>&1`, 30_000);
   return r.exitCode === 0 ? parsePs(r.stdout) : [];
 }
+/** Cocokkan status tersimpan dengan keadaan nyata di server (baca-saja). Susunan "berjalan" yang kontainernya sudah mati (mis. server di-restart) ditandai gagal. */
+export async function reconcile(id: number) {
+  const row = await getRow(id);
+  if (row.status !== 'running' || BUSY.has(id)) return { checked: false, ...(await get(id)) };
+  const s = await playgroundServer(row.server_id);
+  const r = await ssh(s, `cd ${dir(id)} 2>/dev/null && docker compose -p ${project(id)} ps --format json 2>&1`, 20_000).catch(() => null);
+  if (!r || r.exitCode === 255 || (r.exitCode !== 0 && !r.stdout.trim() && /ssh|connect|timed? ?out|refused/i.test(r.stderr))) return { checked: false, ...(await get(id)) };   // server tak terjangkau: jangan menebak
+  const cs = r.exitCode === 0 ? parsePs(r.stdout) : [], up = cs.filter((c) => c.State === 'running');
+  if (up.length === 0 || up.length < cs.length) {
+    const detail = up.length === 0 ? 'Kontainer tidak berjalan di server (mungkin server di-restart atau kontainer dihapus). Pasang ulang untuk menyalakannya.' : `Sebagian kontainer mati: ${cs.filter((c) => c.State !== 'running').map((c) => `${c.Service} (${c.State})`).join(', ')}. Pasang ulang untuk memulihkan.`;
+    await save(id, { status: 'failed', detail });
+  }
+  return { checked: true, ...(await get(id)) };
+}
 export async function logs(id: number): Promise<string> {
   const row = await getRow(id), s = await playgroundServer(row.server_id);
   const r = await ssh(s, `cd ${dir(id)} 2>/dev/null && docker compose -p ${project(id)} logs --no-color --tail 200 2>&1`, 30_000);

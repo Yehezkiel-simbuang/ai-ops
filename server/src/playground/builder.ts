@@ -51,5 +51,6 @@ export function buildCompose(raw: unknown): string {
   if (s.db?.kind === 'postgres') services.db = { image: `postgres:${s.db.version || '17-alpine'}`, environment: { POSTGRES_USER: 'app', POSTGRES_PASSWORD: 'app', POSTGRES_DB: 'app' }, ...hc(['CMD-SHELL', 'pg_isready -U app -d app']), ...res(s.db.limits) };
   if (s.db?.kind === 'mysql') services.db = { image: `mysql:${s.db.version || '8.4'}`, environment: { MYSQL_USER: 'app', MYSQL_PASSWORD: 'app', MYSQL_DATABASE: 'app', MYSQL_ROOT_PASSWORD: 'root' }, ...hc(['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uroot -proot --silent']), ...res(s.db.limits) };
   if (s.redis) services.cache = { image: 'redis:7-alpine', ...hc(['CMD', 'redis-cli', 'ping']), ...res(s.redis.limits) };
+  for (const k of Object.keys(services)) services[k] = { restart: 'unless-stopped', ...(services[k] as object) };   // kontainer menyala lagi setelah server di-restart
   return stringify({ services, ...(Object.keys(configs).length ? { configs } : {}) });
 }

@@ -76,6 +76,7 @@ export function analyze(text: string): ComposeAnalysis {
     if (typeof s.image === 'string' && (!s.image.includes(':') || s.image.endsWith(':latest')) && !s.image.includes('@')) out.warnings.push(`${at}: image "${s.image}" tanpa versi tetap; hasil uji bisa berubah antar pemasangan`);
     const reg = typeof s.image === 'string' ? /^([a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?::\d+)?)\//i.exec(s.image)?.[1]?.toLowerCase() : undefined;
     if (reg && !KNOWN_REGISTRIES.has(reg)) out.warnings.push(`${at}: image dari registri "${reg}" yang tidak dikenal; pastikan sumbernya tepercaya (kontainer berjalan di server nyata)`);
+    if (!s.restart) out.warnings.push(`${at}: tanpa "restart"; kontainer tidak menyala lagi setelah server di-restart (mis. "restart: unless-stopped")`);
     if (!s.healthcheck) out.warnings.push(`${at}: tanpa healthcheck; status "siap" hanya berarti kontainer berjalan`);
     out.services.push({ name, image: String(s.image ?? ''), ports, volumes: vols.map((v) => (typeof v === 'string' ? v : JSON.stringify(v))), hasHealthcheck: !!s.healthcheck });
   }

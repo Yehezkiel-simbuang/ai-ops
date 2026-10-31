@@ -1,5 +1,5 @@
 // Playground: pasang susunan Docker Compose di server uji (khusus uji), periksa kesehatannya, uji beban, lalu copot.
-import { queryOptions, useQuery } from '@tanstack/react-query';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { q, useAction } from '@/api/queries';
@@ -80,6 +80,13 @@ export function PlaygroundPage() {
   const navigate = useNavigate(), [logs, setLogs] = useState<number | null>(null);
   const playgrounds = (servers.data ?? []).filter((s) => s.playground);
   const current = logs === null ? null : (list.data ?? []).find((d) => d.id === logs) ?? null;
+  // Status "Berjalan" tersimpan di basis data; cocokkan dengan keadaan nyata di server sekali saat halaman dibuka (baca-saja).
+  const qc = useQueryClient(), [checked, setChecked] = useState(false);
+  useEffect(() => {
+    if (checked || !list.data) return; setChecked(true);
+    const running = list.data.filter((d) => d.status === 'running');
+    if (running.length) void Promise.allSettled(running.map((d) => post(`/api/playground/${d.id}/check`))).then(() => qc.invalidateQueries({ queryKey: ['playground'] }));
+  }, [checked, list.data, qc]);
   useEffect(() => { if (logs !== null && !current && list.data) setLogs(null); }, [logs, current, list.data]);
   return (
     <>

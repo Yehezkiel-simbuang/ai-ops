@@ -23,6 +23,12 @@ describe('perakit susunan', () => {
   it('konfigurasi Nginx meng-escape $ agar tidak ditafsirkan Compose sebagai variabel', () => {
     expect(parse(buildCompose({ app: { ...app, replicas: 2 }, lb: 'nginx' })).configs.lbconf.content).toContain('proxy_set_header Host $$host;');
   });
+  it('setiap layanan diberi restart: unless-stopped, dan compose tanpa restart diberi peringatan', () => {
+    const d = parse(buildCompose({ app: { ...app, replicas: 2 }, db: { kind: 'mysql' }, redis: {} }));
+    for (const [n, s] of Object.entries<any>(d.services)) expect(s.restart, n).toBe('unless-stopped');
+    expect(analyze(buildCompose({ app }) ).warnings.join('|')).not.toMatch(/restart/);
+    expect(analyze(['services:', '  a:', '    image: x:1', '    ports: ["8080:80"]', ''].join(String.fromCharCode(10))).warnings.join('|')).toMatch(/tanpa "restart"/);
+  });
   it('batas CPU dan memori dipasang per komponen', () => {
     const d = parse(buildCompose({ app: { ...app, limits: { cpus: 0.5, memory: '512M' } }, db: { kind: 'mysql', limits: { memory: '1g' } } }));
     expect(d.services.app.deploy.resources.limits).toEqual({ cpus: '0.5', memory: '512m' }); expect(d.services.db.deploy.resources.limits).toEqual({ memory: '1g' });

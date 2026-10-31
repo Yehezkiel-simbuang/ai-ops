@@ -96,6 +96,16 @@ describe('playground lewat API', () => {
     const write = cmds.find((x) => x.includes('base64 -d'))!, b64 = /printf %s '([A-Za-z0-9+/=]+)'/.exec(write)![1]!;
     expect(Buffer.from(b64, 'base64').toString('utf8')).toBe(OK);
   });
+  it('status "berjalan" dicocokkan dengan keadaan nyata: kontainer mati -> gagal; masih hidup -> tetap; server tak terjangkau -> tidak ditebak', async () => {
+    const c = (await create({ name: 'rekonsiliasi' })).json; script = happy; await h.call('POST', `/api/playground/${c.id}/deploy`); await finish(c.id);
+    const st = async () => (await h.call('GET', `/api/playground/${c.id}`)).json;
+    let r = (await h.call('POST', `/api/playground/${c.id}/check`)).json; expect(r).toMatchObject({ checked: true, status: 'running' });
+    script = (cmd) => (/ps --format json/.test(cmd) ? { exitCode: 255, stdout: '', stderr: 'ssh: connect to host 10.1.1.1 port 22: Connection timed out' } : happy(cmd));
+    r = (await h.call('POST', `/api/playground/${c.id}/check`)).json; expect(r.checked).toBe(false); expect((await st()).status).toBe('running');
+    script = (cmd) => (/ps --format json/.test(cmd) ? { exitCode: 0, stdout: '' } : happy(cmd));   // docker menjawab, tetapi tak ada kontainer (server di-restart)
+    r = (await h.call('POST', `/api/playground/${c.id}/check`)).json; expect(r).toMatchObject({ checked: true, status: 'failed' }); expect(r.detail).toMatch(/tidak berjalan/);
+    script = happy; expect((await h.call('POST', `/api/playground/${c.id}/check`)).json.checked).toBe(false);   // sudah bukan "berjalan": tidak diperiksa lagi
+  });
   it('tidak bisa diubah atau dihapus saat berjalan; pasang ulang diperbolehkan; copot membersihkan dan baru setelah itu boleh dihapus', async () => {
     const c = (await create({ name: 'siklus' })).json; script = happy;
     await h.call('POST', `/api/playground/${c.id}/deploy`); await finish(c.id);

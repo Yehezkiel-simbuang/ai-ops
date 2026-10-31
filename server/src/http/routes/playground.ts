@@ -20,6 +20,7 @@ export function playgroundRoutes(): Router {
   r.post('/playground/:id/deploy', handle((req) => Playground.deploy(idParam(req), req.user!.username)));
   r.post('/playground/:id/stop', handle((req) => Playground.stop(idParam(req), req.user!.username)));
   r.get('/playground/:id/containers', handle((req) => Playground.containers(idParam(req))));
+  r.post('/playground/:id/check', handle((req) => Playground.reconcile(idParam(req))));
   r.get('/playground/:id/logs', handle(async (req) => ({ text: await Playground.logs(idParam(req)) })));
   return r;
 }
