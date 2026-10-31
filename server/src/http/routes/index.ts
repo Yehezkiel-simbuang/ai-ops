@@ -6,6 +6,7 @@ import { requireApiSession } from '../middleware/session.js';
 import { agentAdminRoutes } from './agents.js';
 import { accountRoutes, loginRoutes } from './auth.js';
 import { channelRoutes } from './channels.js';
+import { cveRoutes } from './cve.js';
 import { incidentRoutes } from './incidents.js';
 import { labRoutes } from './lab.js';
 import { loadtestRoutes } from './loadtests.js';
@@ -25,6 +26,6 @@ export function apiRoutes(cfg: Config, binDir: string): Router {
   api.use(csrfGuard(cfg));
   api.use(loginRoutes(cfg));
   api.use(requireApiSession(cfg));
-  for (const feature of [accountRoutes(), overviewRoutes(), settingsRoutes(), channelRoutes(), serverRoutes(), monitoringRoutes(), agentAdminRoutes(cfg, binDir), incidentRoutes(), inventoryRoutes(), labRoutes(), webcheckRoutes(), playgroundRoutes(), loadtestRoutes(cfg), vaultRoutes(), maintenanceRoutes(), runRoutes()]) api.use(feature);
+  for (const feature of [accountRoutes(), overviewRoutes(), settingsRoutes(), channelRoutes(), serverRoutes(), monitoringRoutes(), agentAdminRoutes(cfg, binDir), incidentRoutes(), inventoryRoutes(), labRoutes(), webcheckRoutes(), playgroundRoutes(), loadtestRoutes(cfg), vaultRoutes(), maintenanceRoutes(), runRoutes(), cveRoutes()]) api.use(feature);
   return api;
 }

@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from '@/components/Toaster';
 import { DialogProvider } from '@/components/dialogs/DialogProvider';
 import { AgentPage } from '@/features/agent/AgentPage';
+import { CvePage } from '@/features/cve/CvePage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RequireAuth } from '@/features/auth/RequireAuth';
 import { IncidentDetailPage } from '@/features/incidents/IncidentDetailPage';
@@ -38,6 +39,8 @@ export function App() {
           <Route path="ringkasan" element={<OverviewPage />} />
           <Route path="insiden" element={<IncidentsPage />} />
           <Route path="insiden/:id" element={<IncidentDetailPage />} />
+          <Route path="cve" element={<CvePage />} />
+          <Route path="cve/:id" element={<CvePage />} />
           <Route path="inventaris" element={<InventoryPage />} />
           <Route path="inventaris/:id" element={<ServerDocPage />} />
           <Route path="arsitektur" element={<LabPage />} />

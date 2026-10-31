@@ -8,6 +8,7 @@ import { loadConfig } from './config.js';
 import { setCtx } from './context.js';
 import { initCrypto } from './crypto.js';
 import { Db, migrate } from './db.js';
+import * as Cve from './cve.js';
 import * as Incidents from './incidents.js';
 import * as LoadTests from './loadtest/store.js';
 import { closeLab } from './lab/service.js';
@@ -30,7 +31,7 @@ async function main(): Promise<void> {
   for (let i = 1; ; i++) { if (await db.ping()) break; if (i >= 30) throw new Error('Database tidak bisa dihubungi setelah 30 percobaan'); log.warn(`menunggu database (${i}/30)`); await sleep(1000); }
   const applied = await migrate(db, MIGRATIONS, (m) => log.info(m), cfg.DB_SCHEMA); if (!applied.length) log.info('skema sudah terbaru');
   await Auth.ensureAdmin(cfg); await Agent.recover(); await Incidents.recover(); await Playground.recover();
-  Monitor.onTick(() => Agents.watchdog()); Monitor.onTick(() => Incidents.purge()); Monitor.onTick(async () => { await LoadTests.watchdog(); }); Monitor.onTick(async () => { await Maint.runDigest(); }); Monitor.onTick(() => WebChecks.runDue());
+  Monitor.onTick(() => Agents.watchdog()); Monitor.onTick(() => Incidents.purge()); Monitor.onTick(() => Cve.tick()); Monitor.onTick(async () => { await LoadTests.watchdog(); }); Monitor.onTick(async () => { await Maint.runDigest(); }); Monitor.onTick(() => WebChecks.runDue());
 
   const server = createApp({ cfg, db, log }).listen(cfg.PORT, cfg.HOST, () => log.info({ host: cfg.HOST, port: cfg.PORT }, 'server mendengarkan'));
   if (cfg.RUN_SCHEDULER) Monitor.start();

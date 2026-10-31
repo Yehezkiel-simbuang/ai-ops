@@ -6,7 +6,7 @@ import { q } from '@/api/queries';
 import { post } from '@/lib/api';
 import { useApprovalAlert } from './useApprovalAlert';
 import {
-  IconChart, IconFlame, IconFlask, IconBook, IconCloud, IconScale, IconGauge, IconGlobe, IconHome, IconLayers, IconLock, IconMenu, IconPulse, IconServer, IconSliders, IconWrench, IconClose, type IconType
+  IconChart, IconFlame, IconFlask, IconBook, IconCloud, IconScale, IconGauge, IconGlobe, IconHome, IconLayers, IconLock, IconMenu, IconPulse, IconServer, IconShield, IconSliders, IconWrench, IconClose, type IconType
 } from '@/components/icons';
 
 interface NavItem { to: string; label: string; icon: IconType; badge?: 'pending' | 'incidents' | 'alerts' | 'setup' }
@@ -23,6 +23,7 @@ const GROUPS: NavGroup[] = [
   ] },
   { title: 'Kelola', items: [
     { to: '/inventaris', label: 'Inventaris', icon: IconLayers },
+    { to: '/cve', label: 'Cek CVE', icon: IconShield },
     { to: '/setup', label: 'Setup', icon: IconWrench, badge: 'setup' },
     { to: '/standar', label: 'Standar', icon: IconScale }
   ] },
