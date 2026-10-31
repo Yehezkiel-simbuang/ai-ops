@@ -11,7 +11,7 @@ export function useApprovalAlert(count: number): void {
   useEffect(() => {
     document.title = count > 0 ? `(${count}) Perlu tindakan | ${base.current}` : base.current;
     if (count > prev.current && document.hidden && supported() && Notification.permission === 'granted') {
-      try { new Notification('AI Ops', { body: `${count} hal menunggu tindakan Anda (persetujuan atau perintah gagal).`, tag: 'aiops-approval' }); } catch { /* beberapa browser melarang konstruktor di sini */ }
+      try { new Notification('AI Ops', { body: `${count} hal butuh perhatian Anda (insiden, peringatan, persetujuan, server tak terjangkau, atau pemeliharaan terlambat).`, tag: 'aiops-approval' }); } catch { /* beberapa browser melarang konstruktor di sini */ }
     }
     prev.current = count;
   }, [count]);

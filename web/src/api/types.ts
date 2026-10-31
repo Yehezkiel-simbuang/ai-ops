@@ -22,7 +22,7 @@ export interface UsageTotal { input: number; output: number; calls: number; cost
 export interface Overview {
   servers: Array<Pick<Server, 'id' | 'name' | 'host' | 'last_seen' | 'open_alerts'> & { status: ServerStatus }>;
   pending: PendingCommand[]; incidents: Incident[]; recsWaiting: number;
-  maintenance: { overdue: number; soon: number }; rotationDue: number;
+  maintenance: { overdue: number; soon: number }; rotationDue: number; playgroundFailed?: number;
   runs: Run[]; usage: UsageTotal; alerts: Alert[]; setupReady: boolean; monitorReady: boolean;
 }
 

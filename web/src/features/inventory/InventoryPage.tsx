@@ -44,6 +44,7 @@ function MaintenanceTab({ search }: { search: string }) {
 
 export function InventoryPage() {
   const [tab, setTab] = useState<Tab>('server'), [search, setSearch] = useState('');
+  const ov = useQuery(q.overview()).data, due = { overdue: ov?.maintenance.overdue ?? 0, rotation: ov?.rotationDue ?? 0 };
   const term = useDebounced(search), servers = useQuery(q.inventory({ q: term, env: '' }));   // pencarian teks di server; filter lanjutan, urutan, dan halaman di tabel
   return (
     <>
@@ -51,7 +52,7 @@ export function InventoryPage() {
       <div className="row" style={{ marginBottom: 12 }}>
         <input type="search" aria-label="Cari" placeholder="Cari: nama, IP, username, fungsi, port, tag, pemilik..." style={{ maxWidth: 420, width: '100%' }} value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'server', label: 'Server' }, { id: 'vault', label: 'Vault kredensial' }, { id: 'maint', label: 'Pemeliharaan' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: 'server', label: 'Server' }, { id: 'vault', label: due.rotation ? `Vault kredensial (${due.rotation})` : 'Vault kredensial' }, { id: 'maint', label: due.overdue ? `Pemeliharaan (${due.overdue} terlambat)` : 'Pemeliharaan' }]} />
       {tab === 'server' && <Async query={servers}>{(rows) => <ServerGrid rows={rows} searching={!!term} />}</Async>}
       {tab === 'vault' && <VaultTab search={term} />}
       {tab === 'maint' && <MaintenanceTab search={term} />}

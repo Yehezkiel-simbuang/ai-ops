@@ -9,7 +9,7 @@ import {
   IconChart, IconFlame, IconFlask, IconBook, IconCloud, IconScale, IconGauge, IconGlobe, IconHome, IconLayers, IconLock, IconMenu, IconPulse, IconServer, IconShield, IconSliders, IconWrench, IconClose, type IconType
 } from '@/components/icons';
 
-interface NavItem { to: string; label: string; icon: IconType; badge?: 'pending' | 'incidents' | 'alerts' | 'setup' }
+interface NavItem { to: string; label: string; icon: IconType; badge?: 'pending' | 'incidents' | 'alerts' | 'setup' | 'servers' | 'inventory' | 'playground' }
 interface NavGroup { title: string; items: NavItem[] }
 
 /** Menu dikelompokkan menurut tujuan: yang dilihat tiap hari di atas, yang jarang dipakai di bawah. */
@@ -18,18 +18,18 @@ const GROUPS: NavGroup[] = [
     { to: '/ringkasan', label: 'Ringkasan', icon: IconHome, badge: 'pending' },
     { to: '/monitor', label: 'Monitor', icon: IconPulse, badge: 'alerts' },
     { to: '/insiden', label: 'Insiden', icon: IconFlame, badge: 'incidents' },
-    { to: '/server', label: 'Server', icon: IconServer },
+    { to: '/server', label: 'Server', icon: IconServer, badge: 'servers' },
     { to: '/layanan', label: 'Layanan', icon: IconGlobe }
   ] },
   { title: 'Kelola', items: [
-    { to: '/inventaris', label: 'Inventaris', icon: IconLayers },
+    { to: '/inventaris', label: 'Inventaris', icon: IconLayers, badge: 'inventory' },
     { to: '/cve', label: 'Cek CVE', icon: IconShield },
     { to: '/setup', label: 'Setup', icon: IconWrench, badge: 'setup' },
     { to: '/standar', label: 'Standar', icon: IconScale }
   ] },
   { title: 'Uji', items: [
     { to: '/arsitektur', label: 'Arsitektur', icon: IconFlask },
-    { to: '/playground', label: 'Playground', icon: IconCloud },
+    { to: '/playground', label: 'Playground', icon: IconCloud, badge: 'playground' },
     { to: '/uji-beban', label: 'Uji beban', icon: IconGauge }
   ] },
   { title: 'Lainnya', items: [
@@ -51,9 +51,12 @@ export function AppShell() {
   const overview = useQuery(q.overview()).data, client = useQueryClient(), navigate = useNavigate(), { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const stuck = overview?.runs.filter((r) => r.status === 'needs_attention').length ?? 0;   // proses Setup yang berhenti karena perintah gagal
-  const counts = { pending: overview?.pending.length ?? 0, incidents: overview?.incidents.length ?? 0, alerts: overview?.alerts.length ?? 0, setup: (overview?.pending.length ?? 0) + stuck };
-  const attention = counts.pending + counts.incidents + counts.alerts + stuck;
-  useApprovalAlert(counts.setup);
+  const counts = { pending: overview?.pending.length ?? 0, incidents: overview?.incidents.length ?? 0, alerts: overview?.alerts.length ?? 0, setup: (overview?.pending.length ?? 0) + stuck,
+    servers: overview?.servers.filter((s) => s.status === 'tidak terjangkau').length ?? 0,   // server yang tak terjangkau
+    inventory: (overview?.maintenance.overdue ?? 0) + (overview?.rotationDue ?? 0),   // tugas pemeliharaan terlambat + kredensial lewat jadwal rotasi
+    playground: overview?.playgroundFailed ?? 0 };
+  const attention = counts.pending + counts.incidents + counts.alerts + stuck + counts.servers + counts.inventory + counts.playground;
+  useApprovalAlert(attention);   // judul tab dan notifikasi browser mengikuti semua yang butuh perhatian, bukan hanya Setup
 
   useEffect(() => { setOpen(false); }, [pathname]);   // pindah halaman menutup menu
   useEffect(() => {

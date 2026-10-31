@@ -212,6 +212,11 @@ Uji nyata: `node scripts/e2e-agent.mjs` menjalankan agen Go sungguhan di kontain
 
 Agar agen bisa menghubungi aplikasi, setel `PUBLIC_URL` (alamat yang terjangkau dari server) dan tambahkan hostname-nya ke `ALLOWED_HOSTS`; gunakan HTTPS (profil `lan` atau `lan-internal`, atau reverse proxy HTTPS Anda sendiri dengan `TRUST_PROXY=true`). Agen menolak `http://` kecuali `insecure_http=true` (hanya uji lokal).
 
+## Penanda "perlu perhatian"
+
+- Angka merah di menu: **Insiden** (terbuka), **Monitor** (peringatan), **Setup** (persetujuan dan proses gagal), **Server** (tak terjangkau), **Inventaris** (tugas pemeliharaan terlambat + kredensial lewat jadwal rotasi), **Playground** (susunan gagal). Tab di Inventaris juga memuat angkanya ("Pemeliharaan (2 terlambat)").
+- Jumlah seluruhnya tampil di judul tab browser, "(5) Perlu tindakan | AI Ops", dan notifikasi browser (bila diizinkan) muncul saat jumlahnya naik ketika tab tidak dilihat. Tidak ada menu terpisah; semuanya dari `GET /api/overview`.
+
 ## Buku solusi insiden (contekan masalah berulang)
 
 - Di halaman insiden, isi **Penyebab** dan **Penyelesaian** (tersimpan di tabel `incidents`, migrasi 028, dengan nama dan waktu). Bisa diisi saat insiden masih terbuka.
