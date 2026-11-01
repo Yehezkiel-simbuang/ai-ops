@@ -57,7 +57,7 @@ export function TaskList({ tasks, withServer = false, empty }: { tasks: Maintena
   return <List>{tasks.map((t) => <TaskRow key={t.id} t={t} withServer={withServer} />)}</List>;
 }
 
-function TaskForm({ serverId, onClose }: { serverId: number; onClose: () => void }) {
+export function TaskForm({ serverId, onClose }: { serverId: number; onClose: () => void }) {
   const { values, bind } = useForm({ title: '', description: '', every: '', due: '', priority: 'normal' });
   const save = useAction(() => post(`/api/servers/${serverId}/maintenance`, {
     title: values.title, description: values.description, every_days: values.every === '' ? null : Number(values.every), due_at: dateInputToMs(String(values.due)), priority: values.priority

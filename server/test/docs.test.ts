@@ -196,7 +196,7 @@ describe('pemeliharaan', () => {
     expect((await h.call('POST', `/api/servers/${a}/maintenance`, { title: '' })).status).toBe(400); expect((await h.call('POST', `/api/servers/${a}/maintenance`, { title: 'x', every_days: 99999 })).status).toBe(400); expect((await h.call('DELETE', `/api/maintenance/${far.id}`)).status).toBe(200);
   });
   it('inventaris dan ringkasan menunjukkan pemeliharaan terlambat', async () => {
-    const row = (await h.call('GET', '/api/inventory?q=webapp')).json[0]; expect(row.overdue).toBeGreaterThanOrEqual(0); const ov = (await h.call('GET', '/api/overview')).json; expect(ov.maintenance).toHaveProperty('overdue'); expect(ov.rotationDue).toBeGreaterThanOrEqual(0);
+    const row = (await h.call('GET', '/api/inventory?q=webapp')).json[0]; expect(row.overdue).toBeGreaterThanOrEqual(0); const ov = (await h.call('GET', '/api/overview')).json; expect(ov.maintenance).toHaveProperty('overdue'); expect(Array.isArray(ov.maintenance.top)).toBe(true); expect(ov.maintenance.top.length).toBeLessThanOrEqual(3); expect(ov.maintenance.top.length).toBe(Math.min(3, ov.maintenance.overdue)); expect(typeof ov.playgroundFailed).toBe('number'); expect(ov.rotationDue).toBeGreaterThanOrEqual(0);
   });
 });
 

@@ -49,8 +49,8 @@ describe('AppShell', () => {
   it('server tak terjangkau, pemeliharaan terlambat + rotasi, dan susunan gagal tampil sebagai angka merah di menunya masing-masing', async () => {
     render(overview({ servers: [{ id: 1, name: 'a', host: 'h', status: 'tidak terjangkau', open_alerts: 0, last_seen: null } as never, { id: 2, name: 'b', host: 'h', status: 'ok', open_alerts: 0, last_seen: null } as never], maintenance: { overdue: 2, soon: 5 }, rotationDue: 1, playgroundFailed: 1 }));
     const nav = screen.getByRole('navigation', { name: 'Navigasi utama' });
-    expect(await within(nav).findByRole('link', { name: /Server\s*1/ })).toBeInTheDocument(); expect(within(nav).getByRole('link', { name: /Inventaris\s*3/ })).toBeInTheDocument(); expect(within(nav).getByRole('link', { name: /Playground\s*1/ })).toBeInTheDocument();
-    expect(document.title).toMatch(/^\(5\) Perlu tindakan/);   // 1 server + 3 inventaris + 1 playground
+    expect(await within(nav).findByRole('link', { name: /Server\s*1/ })).toBeInTheDocument(); expect(within(nav).getByRole('link', { name: /Pemeliharaan\s*2/ })).toBeInTheDocument(); expect(within(nav).getByRole('link', { name: /Inventaris\s*1/ })).toBeInTheDocument(); expect(within(nav).getByRole('link', { name: /Playground\s*1/ })).toBeInTheDocument();
+    expect(document.title).toMatch(/^\(5\) Perlu tindakan/);   // 1 server + 2 pemeliharaan + 1 inventaris + 1 playground
   });
 
   it('tanpa yang menunggu, tidak ada angka di Setup dan judul tab biasa', async () => {

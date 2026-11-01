@@ -26,15 +26,17 @@ function FirstSteps({ o }: { o: Overview }) {
 }
 
 function MaintenanceHint({ o }: { o: Overview }) {
-  const { overdue, soon } = o.maintenance;
+  const { overdue, soon, top = [] } = o.maintenance;
   if (!overdue && !soon && !o.rotationDue) return null;
   return (
     <Hint icon={IconTimer}>
       <b>Pemeliharaan</b>
       <div>
-        {overdue > 0 && `${overdue} tugas terlambat. `}{soon > 0 && `${soon} jatuh tempo dalam 7 hari. `}{o.rotationDue > 0 && `${o.rotationDue} password sudah waktunya diganti. `}
-        <Link to="/inventaris">Buka Inventaris</Link>
+        {overdue > 0 && <>{overdue} tugas terlambat{top.length ? `: ${top.map((t) => (t.server_name ? `${t.title} (${t.server_name})` : t.title)).join(', ')}${overdue > top.length ? ', dan lainnya' : ''}` : ''}. </>}
+        {soon > 0 && `${soon} jatuh tempo dalam 7 hari. `}
+        {(overdue > 0 || soon > 0) && <Link to="/pemeliharaan">Buka Pemeliharaan</Link>}
       </div>
+      {o.rotationDue > 0 && <div>{o.rotationDue} password sudah waktunya diganti. <Link to="/inventaris">Buka Inventaris</Link></div>}
     </Hint>
   );
 }

@@ -9,9 +9,8 @@ import { Note, PageHead, Tabs } from '@/components/ui/Layout';
 import { IconLayers, IconPlus } from '@/components/icons';
 import { useDebounced } from '@/lib/useDebounced';
 import { CredentialDialog } from './CredentialDialog';
-import { MaintenanceGrid, VaultGrid } from './InventoryGrids';
-import { PatchingPanel } from './PatchingPanel';
-import { PatchPlansPanel } from './PatchPlansPanel';
+import { VaultGrid } from './InventoryGrids';
+import { MaintenanceBody } from './MaintenancePage';
 import { ServerGrid } from './ServerGrid';
 
 type Tab = 'server' | 'vault' | 'maint';
@@ -31,17 +30,6 @@ function VaultTab({ search }: { search: string }) {
   );
 }
 
-function MaintenanceTab({ search }: { search: string }) {
-  const query = useQuery(q.maintenance()), needle = search.toLowerCase();
-  return (
-    <>
-      <PatchingPanel />
-      <PatchPlansPanel />
-      <Async query={query}>{(rows) => <MaintenanceGrid rows={rows.filter((t) => !needle || `${t.title} ${t.server_name ?? ''}`.toLowerCase().includes(needle))} searching={!!needle} />}</Async>
-    </>
-  );
-}
-
 export function InventoryPage() {
   const [tab, setTab] = useState<Tab>('server'), [search, setSearch] = useState('');
   const ov = useQuery(q.overview()).data, due = { overdue: ov?.maintenance.overdue ?? 0, rotation: ov?.rotationDue ?? 0 };
@@ -55,7 +43,7 @@ export function InventoryPage() {
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'server', label: 'Server' }, { id: 'vault', label: due.rotation ? `Vault kredensial (${due.rotation})` : 'Vault kredensial' }, { id: 'maint', label: due.overdue ? `Pemeliharaan (${due.overdue} terlambat)` : 'Pemeliharaan' }]} />
       {tab === 'server' && <Async query={servers}>{(rows) => <ServerGrid rows={rows} searching={!!term} />}</Async>}
       {tab === 'vault' && <VaultTab search={term} />}
-      {tab === 'maint' && <MaintenanceTab search={term} />}
+      {tab === 'maint' && <MaintenanceBody search={term} />}
     </>
   );
 }

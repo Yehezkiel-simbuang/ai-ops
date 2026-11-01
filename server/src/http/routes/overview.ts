@@ -14,9 +14,10 @@ async function overview() {
   const pending = await db().query("SELECT c.id, c.run_id, c.command, c.purpose, c.reason, r.name AS run_name FROM commands c JOIN runs r ON r.id=c.run_id WHERE c.status='pending_approval' ORDER BY c.id");
   const incidents = await Incidents.listIncidents('open');
   const recsWaiting = (await db().one<{ c: number }>("SELECT COUNT(*)::int AS c FROM recommendations WHERE status='proposed' AND (kind='patch' OR incident_id IN (SELECT id FROM incidents WHERE status='open'))"))!.c;
+  const overdue = await Maint.list({ scope: 'overdue' });
   return {
     servers, pending, incidents: incidents.slice(0, 6), recsWaiting,
-    maintenance: { overdue: (await Maint.list({ scope: 'overdue' })).length, soon: (await Maint.list({ scope: 'soon' })).length },
+    maintenance: { overdue: overdue.length, soon: (await Maint.list({ scope: 'soon' })).length, top: (overdue as unknown as Array<Record<string, unknown>>).slice(0, 3).map((t) => ({ title: String(t.title), server_name: (t.server_name as string | null) ?? null })) },
     playgroundFailed: (await db().one<{ c: number }>("SELECT COUNT(*)::int AS c FROM playground_deploys WHERE status='failed'"))!.c,
     rotationDue: (await Vault.list(null)).filter((c) => c.rotation_overdue).length,
     runs: (await Store.runs()).slice(0, 5), usage: (await Store.summary(7)).total, alerts: (await Monitor.alerts(null, true)).filter((a) => (a as { level?: string }).level !== 'info').slice(0, 8),

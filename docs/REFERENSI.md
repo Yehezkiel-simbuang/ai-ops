@@ -214,8 +214,10 @@ Agar agen bisa menghubungi aplikasi, setel `PUBLIC_URL` (alamat yang terjangkau 
 
 ## Penanda "perlu perhatian"
 
-- Angka merah di menu: **Insiden** (terbuka), **Monitor** (peringatan), **Setup** (persetujuan dan proses gagal), **Server** (tak terjangkau), **Inventaris** (tugas pemeliharaan terlambat + kredensial lewat jadwal rotasi), **Playground** (susunan gagal). Tab di Inventaris juga memuat angkanya ("Pemeliharaan (2 terlambat)").
+- Angka merah di menu: **Insiden** (terbuka), **Monitor** (peringatan), **Setup** (persetujuan dan proses gagal), **Server** (tak terjangkau), **Pemeliharaan** (tugas terlambat), **Inventaris** (kredensial lewat jadwal rotasi), **Playground** (susunan gagal). Tab di Inventaris juga memuat angkanya.
 - Jumlah seluruhnya tampil di judul tab browser, "(5) Perlu tindakan | AI Ops", dan notifikasi browser (bila diizinkan) muncul saat jumlahnya naik ketika tab tidak dilihat. Tidak ada menu terpisah; semuanya dari `GET /api/overview`.
+
+- Menu **Pemeliharaan** (`/pemeliharaan`) berdiri sendiri: ringkasan Terlambat / Segera / Aman, tombol **Tugas baru** (pilih server, isi sendiri atau ambil dari templat standar), pembaruan sistem, rencana patch, dan daftar tugas. Isinya sama dengan tab Pemeliharaan di Inventaris. Kotak di Ringkasan menyebut tugas yang terlambat (3 teratas) dan membuka halaman ini.
 
 ## Buku solusi insiden (contekan masalah berulang)
 

@@ -6,10 +6,10 @@ import { q } from '@/api/queries';
 import { post } from '@/lib/api';
 import { useApprovalAlert } from './useApprovalAlert';
 import {
-  IconChart, IconFlame, IconFlask, IconBook, IconCloud, IconScale, IconGauge, IconGlobe, IconHome, IconLayers, IconLock, IconMenu, IconPulse, IconServer, IconShield, IconSliders, IconWrench, IconClose, type IconType
+  IconChart, IconFlame, IconFlask, IconBook, IconCloud, IconScale, IconGauge, IconGlobe, IconHome, IconLayers, IconLock, IconMenu, IconPulse, IconServer, IconShield, IconSliders, IconTimer, IconWrench, IconClose, type IconType
 } from '@/components/icons';
 
-interface NavItem { to: string; label: string; icon: IconType; badge?: 'pending' | 'incidents' | 'alerts' | 'setup' | 'servers' | 'inventory' | 'playground' }
+interface NavItem { to: string; label: string; icon: IconType; badge?: 'pending' | 'incidents' | 'alerts' | 'setup' | 'servers' | 'inventory' | 'maintenance' | 'playground' }
 interface NavGroup { title: string; items: NavItem[] }
 
 /** Menu dikelompokkan menurut tujuan: yang dilihat tiap hari di atas, yang jarang dipakai di bawah. */
@@ -22,6 +22,7 @@ const GROUPS: NavGroup[] = [
     { to: '/layanan', label: 'Layanan', icon: IconGlobe }
   ] },
   { title: 'Kelola', items: [
+    { to: '/pemeliharaan', label: 'Pemeliharaan', icon: IconTimer, badge: 'maintenance' },
     { to: '/inventaris', label: 'Inventaris', icon: IconLayers, badge: 'inventory' },
     { to: '/cve', label: 'Cek CVE', icon: IconShield },
     { to: '/setup', label: 'Setup', icon: IconWrench, badge: 'setup' },
@@ -53,9 +54,10 @@ export function AppShell() {
   const stuck = overview?.runs.filter((r) => r.status === 'needs_attention').length ?? 0;   // proses Setup yang berhenti karena perintah gagal
   const counts = { pending: overview?.pending.length ?? 0, incidents: overview?.incidents.length ?? 0, alerts: overview?.alerts.length ?? 0, setup: (overview?.pending.length ?? 0) + stuck,
     servers: overview?.servers.filter((s) => s.status === 'tidak terjangkau').length ?? 0,   // server yang tak terjangkau
-    inventory: (overview?.maintenance.overdue ?? 0) + (overview?.rotationDue ?? 0),   // tugas pemeliharaan terlambat + kredensial lewat jadwal rotasi
+    maintenance: overview?.maintenance.overdue ?? 0,   // tugas pemeliharaan yang terlambat
+    inventory: overview?.rotationDue ?? 0,   // kredensial lewat jadwal rotasi
     playground: overview?.playgroundFailed ?? 0 };
-  const attention = counts.pending + counts.incidents + counts.alerts + stuck + counts.servers + counts.inventory + counts.playground;
+  const attention = counts.pending + counts.incidents + counts.alerts + stuck + counts.servers + counts.maintenance + counts.inventory + counts.playground;
   useApprovalAlert(attention);   // judul tab dan notifikasi browser mengikuti semua yang butuh perhatian, bukan hanya Setup
 
   useEffect(() => { setOpen(false); }, [pathname]);   // pindah halaman menutup menu

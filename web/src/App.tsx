@@ -6,6 +6,7 @@ import { CvePage } from '@/features/cve/CvePage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RequireAuth } from '@/features/auth/RequireAuth';
 import { IncidentDetailPage } from '@/features/incidents/IncidentDetailPage';
+import { MaintenancePage } from '@/features/inventory/MaintenancePage';
 import { IncidentsPage } from '@/features/incidents/IncidentsPage';
 import { InventoryPage } from '@/features/inventory/InventoryPage';
 import { LabPage } from '@/features/lab/LabPage';
@@ -41,6 +42,7 @@ export function App() {
           <Route path="insiden/:id" element={<IncidentDetailPage />} />
           <Route path="cve" element={<CvePage />} />
           <Route path="cve/:id" element={<CvePage />} />
+          <Route path="pemeliharaan" element={<MaintenancePage />} />
           <Route path="inventaris" element={<InventoryPage />} />
           <Route path="inventaris/:id" element={<ServerDocPage />} />
           <Route path="arsitektur" element={<LabPage />} />
